@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Farming AI – Tamil Nadu Agricultural Assistant</title>
+    <meta name="description" content="AI-powered smart farming chatbot for Tamil Nadu. Get crop recommendations, rainfall data, wage info, irrigation profiles and pest risk analysis by district.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<!-- Background blobs -->
+<div class="bg-canvas">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+</div>
+
+<div class="app-shell">
+
+    <!-- ════ SIDEBAR ════ -->
+    <aside class="sidebar" id="sidebar">
+
+        <div class="sidebar-logo">
+            <div class="logo-icon">🌿</div>
+            <div class="logo-text">
+                <span class="logo-title">SmartFarm AI</span>
+                <span class="logo-sub">Tamil Nadu · Agricultural Intelligence</span>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <p class="sidebar-label">QUICK QUERIES</p>
+            <div class="quick-queries" id="quickQueries">
+                <button class="q-chip" data-query="Best crops for Coimbatore?">🌾 Best crops for Coimbatore?</button>
+                <button class="q-chip" data-query="Rainfall in Salem district?">🌧️ Rainfall in Salem?</button>
+                <button class="q-chip" data-query="Irrigation in Thanjavur?">💧 Irrigation in Thanjavur?</button>
+                <button class="q-chip" data-query="Agricultural wages in Madurai?">💰 Wages in Madurai?</button>
+                <button class="q-chip" data-query="Pest risk in Coimbatore?">🐛 Pest risk in Coimbatore?</button>
+                <button class="q-chip" data-query="Overview of Erode district?">📋 Overview of Erode?</button>
+                <button class="q-chip" data-query="Rice yield trend in Cuddalore?">📈 Rice yield in Cuddalore?</button>
+                <button class="q-chip" data-query="Best crops for Madurai with red soil Kharif?">🏔️ Red soil crops Madurai?</button>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <p class="sidebar-label">DISTRICT FILTER</p>
+            <div class="district-search-wrap">
+                <input type="text" id="districtFilter" placeholder="🔍 Filter by district..." autocomplete="off">
+            </div>
+        </div>
+
+        <div class="sidebar-section sidebar-capabilities">
+            <p class="sidebar-label">CAPABILITIES</p>
+            <ul class="cap-list">
+                <li><span class="cap-icon">🌾</span> Crop Recommendations</li>
+                <li><span class="cap-icon">🌧️</span> Rainfall Analysis</li>
+                <li><span class="cap-icon">💰</span> Wage Information</li>
+                <li><span class="cap-icon">💧</span> Irrigation Profiles</li>
+                <li><span class="cap-icon">📈</span> Yield Trend Analysis</li>
+                <li><span class="cap-icon">🐛</span> Pest Risk Detection</li>
+                <li><span class="cap-icon">🏔️</span> Soil Classification</li>
+                <li><span class="cap-icon">📋</span> District Overview</li>
+            </ul>
+        </div>
+
+    </aside>
+
+    <!-- ════ MAIN CHAT AREA ════ -->
+    <main class="chat-main">
+
+        <!-- Top Bar -->
+        <header class="chat-topbar">
+            <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="3" y1="6" x2="21" y2="6"/>
+                    <line x1="3" y1="12" x2="21" y2="12"/>
+                    <line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+            </button>
+            <div class="topbar-info">
+                <div class="status-dot"></div>
+                <span class="topbar-title">Smart Farming AI</span>
+                <span class="topbar-sub">37 Districts · 20 Years of Data</span>
+            </div>
+            <div class="topbar-actions">
+                <button class="action-btn" id="clearChat" title="Clear conversation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Messages container -->
+        <div class="messages-wrap" id="messagesWrap">
+            <div class="messages-list" id="messagesList">
+                <!-- Welcome message injected by JS -->
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-card">
+                <!-- Soil image preview strip -->
+                <div class="soil-preview-strip" id="soilPreviewStrip" style="display:none;">
+                    <img id="soilPreviewImg" src="" alt="Soil preview">
+                    <span id="soilPreviewName">Analyzing soil...</span>
+                    <button class="remove-img-btn" id="removeImgBtn" title="Remove image">✕</button>
+                </div>
+
+                <div class="input-row">
+                    <!-- Image upload button -->
+                    <label class="upload-btn" for="soilImageInput" title="Upload soil image for analysis">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                        <input type="file" id="soilImageInput" accept="image/*" style="display:none;">
+                    </label>
+
+                    <input
+                        type="text"
+                        id="chatInput"
+                        placeholder="Ask about crops, rainfall, wages, irrigation, pests…"
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+
+                    <button class="send-btn" id="sendBtn" title="Send message">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                            <line x1="22" y1="2" x2="11" y2="13"/>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="input-footer">
+                    <span>Tamil Nadu Smart Farming — 18,500+ historical records</span>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+</div>
+
+<!-- Hidden district data for JS -->
+<script>
+    window.ALL_DISTRICTS = {{ districts | tojson }};
+</script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

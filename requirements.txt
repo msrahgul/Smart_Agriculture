@@ -3,3 +3,5 @@ keras
 numpy
 opencv-python
 pandas
+flask
+werkzeug

@@ -1,9 +1,9 @@
 import pandas as pd
 
 # Load additional datasets
-rainfall_data = pd.read_csv("E:\\HACKATHON\\ChatBot\\ChatBot\\MONTHLY RAINFALL-District Level Data (1990-2015).csv")
-wages_data = pd.read_csv("E:\\HACKATHON\\ChatBot\\ChatBot\\Wages-District Level Data (1966-2017).csv")
-fertilizer_data = pd.read_csv("E:\\HACKATHON\\ChatBot\\ChatBot\\Season Fertilizer consumption-District Level Data (1990-2017).csv")
+rainfall_data = pd.read_csv("MONTHLY RAINFALL-District Level Data (1990-2015).csv")
+wages_data = pd.read_csv("Wages-District Level Data (1966-2017).csv")
+fertilizer_data = pd.read_csv("Season Fertilizer consumption-District Level Data (1990-2017).csv")
 
 # Function to retrieve rainfall and wage data for a district
 def get_rainfall_and_wage_data(district):

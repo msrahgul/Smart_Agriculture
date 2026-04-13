@@ -1,0 +1,3 @@
+dataset_name,rows,columns,districts,year_min,year_max,notes
+historical_ml_master,18525,48,37,1998,2019,Main training table; crop-season-district-year rows with rainfall + approximate legacy wages/fertilizer joins.
+district_profile_2024_25,38,46,38,2024,2025,"Current district profile with irrigation, land, groundwater, and current agri wages."

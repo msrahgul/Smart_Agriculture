@@ -1,0 +1,95 @@
+dataset_name,column_name,dtype,description
+historical_ml_master,district,object,Modern Tamil Nadu district name standardized across files.
+historical_ml_master,legacy_district,object,Approximate legacy district name used to attach older wage/fertilizer series.
+historical_ml_master,legacy_mapping_approximate,int64,1 if the row received a legacy district mapping; 0 otherwise.
+historical_ml_master,year_start,Int64,"Starting year used for joins. For crop years like 2002-03, this is 2002."
+historical_ml_master,agri_year_label,object,Original agricultural year label from crop data.
+historical_ml_master,crop_name,object,Crop name.
+historical_ml_master,season,object,Crop season label from source.
+historical_ml_master,soil_type,object,Soil type from crop dataset.
+historical_ml_master,area,float64,Cultivated area for the crop row.
+historical_ml_master,area_units,object,Units of area.
+historical_ml_master,production,float64,Crop production for the row.
+historical_ml_master,production_units,object,Units of production.
+historical_ml_master,yield,float64,Crop yield from source.
+historical_ml_master,district_rain_total_mm,float64,District annual rainfall total from daily rainfall file.
+historical_ml_master,district_sw_monsoon_rain_mm,float64,District rainfall total for Southwest Monsoon months (Jun-Sep).
+historical_ml_master,district_ne_monsoon_rain_mm,float64,District rainfall total for Northeast Monsoon months (Oct-Dec).
+historical_ml_master,district_hot_weather_rain_mm,float64,District rainfall total for hot weather months (Mar-May).
+historical_ml_master,district_winter_rain_mm,float64,District rainfall total for winter months (Jan-Feb).
+historical_ml_master,district_rain_avg_daily_mm,float64,Mean district daily rainfall across recorded rows in the year.
+historical_ml_master,district_rain_max_daily_mm,float64,Maximum daily rainfall recorded in the district-year.
+historical_ml_master,district_rainy_days,float64,Count of recorded rows with rainfall > 0 in the district-year.
+historical_ml_master,district_rainfall_records,float64,Number of rainfall records in the district-year.
+historical_ml_master,district_rain_station_count,float64,Number of unique rainfall stations in the district-year.
+historical_ml_master,manual_rain_total_mm,float64,Annual rainfall total from the manual rainfall file (available for selected districts only).
+historical_ml_master,manual_rain_avg_daily_mm,float64,Average daily rainfall from the manual rainfall file.
+historical_ml_master,manual_rain_max_daily_mm,float64,Maximum daily rainfall from the manual rainfall file.
+historical_ml_master,manual_rainy_days,float64,Count of manual rainfall records > 0.
+historical_ml_master,manual_rain_station_count,float64,Unique manual rainfall stations in the district-year.
+historical_ml_master,manual_rain_records,float64,Count of manual rainfall records in the district-year.
+historical_ml_master,tn_sw_monsoon_actual_mm,float64,Tamil Nadu statewide Southwest Monsoon rainfall for the year.
+historical_ml_master,tn_ne_monsoon_actual_mm,float64,Tamil Nadu statewide Northeast Monsoon rainfall for the year.
+historical_ml_master,tn_winter_actual_mm,float64,Tamil Nadu statewide winter rainfall for the year.
+historical_ml_master,tn_hot_weather_actual_mm,float64,Tamil Nadu statewide hot-weather rainfall for the year.
+historical_ml_master,tn_whole_year_actual_mm,float64,Tamil Nadu statewide whole-year rainfall for the year.
+historical_ml_master,tn_whole_year_normal_mm,float64,Tamil Nadu statewide normal whole-year rainfall benchmark.
+historical_ml_master,tn_year_dev_pct,float64,Percent deviation of statewide whole-year rainfall from normal.
+historical_ml_master,legacy_male_field_labour_rs_per_day,float64,Legacy-district male field labour wage in rupees per day.
+historical_ml_master,legacy_female_field_labour_rs_per_day,float64,Legacy-district female field labour wage in rupees per day.
+historical_ml_master,state_male_average_field_labour_rs_per_day,float64,Tamil Nadu state average male field labour wage in rupees per day.
+historical_ml_master,state_female_average_field_labour_rs_per_day,float64,Tamil Nadu state average female field labour wage in rupees per day.
+historical_ml_master,legacy_nitrogen_kharif_tons,float64,Legacy-district nitrogen fertilizer consumption in Kharif season (tons).
+historical_ml_master,legacy_nitrogen_rabi_tons,float64,Legacy-district nitrogen fertilizer consumption in Rabi season (tons).
+historical_ml_master,legacy_phosphate_kharif_tons,float64,Legacy-district phosphate fertilizer consumption in Kharif season (tons).
+historical_ml_master,legacy_phosphate_rabi_tons,float64,Legacy-district phosphate fertilizer consumption in Rabi season (tons).
+historical_ml_master,legacy_potash_kharif_tons,float64,Legacy-district potash fertilizer consumption in Kharif season (tons).
+historical_ml_master,legacy_potash_rabi_tons,float64,Legacy-district potash fertilizer consumption in Rabi season (tons).
+historical_ml_master,legacy_total_kharif_fertilizer_tons,float64,Legacy-district total fertilizer consumption in Kharif season (tons).
+historical_ml_master,legacy_total_rabi_fertilizer_tons,float64,Legacy-district total fertilizer consumption in Rabi season (tons).
+district_profile_2024_25,district,object,Modern Tamil Nadu district name standardized across files.
+district_profile_2024_25,total_geographical_area,float64,Total geographical area.
+district_profile_2024_25,forest_area,float64,Forest area.
+district_profile_2024_25,barren_unculturable_area,float64,Barren and unculturable area.
+district_profile_2024_25,land_non_agri_uses,float64,Land put to non-agricultural uses.
+district_profile_2024_25,cultivable_waste,float64,Cultivable waste area.
+district_profile_2024_25,permanent_pastures_grazing,float64,Permanent pastures and grazing area.
+district_profile_2024_25,current_fallow_area,float64,Current fallow area.
+district_profile_2024_25,other_fallow_area,float64,Other fallow area.
+district_profile_2024_25,net_area_sown,float64,Net area sown.
+district_profile_2024_25,irrigation_canals,float64,Area irrigated by canals.
+district_profile_2024_25,irrigation_tanks,float64,Area irrigated by tanks.
+district_profile_2024_25,irrigation_tube_bore_wells,float64,Area irrigated by tube/bore wells.
+district_profile_2024_25,irrigation_open_wells,float64,Area irrigated by open wells.
+district_profile_2024_25,irrigation_other_sources,float64,Area irrigated by other sources.
+district_profile_2024_25,total_net_irrigated,float64,Total net irrigated area.
+district_profile_2024_25,groundwater_jul_2024,float64,Groundwater level for Jul 2024.
+district_profile_2024_25,groundwater_aug_2024,float64,Groundwater level for Aug 2024.
+district_profile_2024_25,groundwater_sep_2024,float64,Groundwater level for Sep 2024.
+district_profile_2024_25,groundwater_oct_2024,float64,Groundwater level for Oct 2024.
+district_profile_2024_25,groundwater_nov_2024,float64,Groundwater level for Nov 2024.
+district_profile_2024_25,groundwater_dec_2024,float64,Groundwater level for Dec 2024.
+district_profile_2024_25,groundwater_jan_2025,float64,Groundwater level for Jan 2025.
+district_profile_2024_25,groundwater_feb_2025,float64,Groundwater level for Feb 2025.
+district_profile_2024_25,groundwater_mar_2025,float64,Groundwater level for Mar 2025.
+district_profile_2024_25,groundwater_apr_2025,float64,Groundwater level for Apr 2025.
+district_profile_2024_25,groundwater_may_2025,float64,Groundwater level for May 2025.
+district_profile_2024_25,groundwater_jun_2025,float64,Groundwater level for Jun 2025.
+district_profile_2024_25,groundwater_yearly_average,float64,Average groundwater level across Jul 2024 to Jun 2025.
+district_profile_2024_25,agri_wage_plough_men,float64,Current agricultural wage for plough men.
+district_profile_2024_25,agri_wage_sowers_pluckers_men,float64,Current agricultural wage for sowers/pluckers (men).
+district_profile_2024_25,agri_wage_sowers_pluckers_women,float64,Current agricultural wage for sowers/pluckers (women).
+district_profile_2024_25,agri_wage_transplanters_weeders_women,float64,Current agricultural wage for transplanters/weeders (women).
+district_profile_2024_25,agri_wage_transplanters_weeders_men,float64,Current agricultural wage for transplanters/weeders (men).
+district_profile_2024_25,agri_wage_reapers_harvesters_men,float64,Current agricultural wage for reapers/harvesters (men).
+district_profile_2024_25,agri_wage_reapers_harvesters_women,float64,Current agricultural wage for reapers/harvesters (women).
+district_profile_2024_25,agri_wage_other_operations_men,float64,Current agricultural wage for other agricultural operations (men).
+district_profile_2024_25,agri_wage_other_operations_women,float64,Current agricultural wage for other agricultural operations (women).
+district_profile_2024_25,agri_wage_tractor_driver_men,float64,Current agricultural wage for tractor driver (men).
+district_profile_2024_25,forest_area_share,float64,Forest area divided by total geographical area.
+district_profile_2024_25,net_area_sown_share,float64,Net area sown divided by total geographical area.
+district_profile_2024_25,canal_irrigation_share,float64,Canal irrigation divided by total net irrigated area.
+district_profile_2024_25,tank_irrigation_share,float64,Tank irrigation divided by total net irrigated area.
+district_profile_2024_25,tube_bore_irrigation_share,float64,Tube/bore irrigation divided by total net irrigated area.
+district_profile_2024_25,open_well_irrigation_share,float64,Open-well irrigation divided by total net irrigated area.
+district_profile_2024_25,other_irrigation_share,float64,Other-source irrigation divided by total net irrigated area.

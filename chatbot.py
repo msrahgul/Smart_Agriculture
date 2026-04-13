@@ -9,7 +9,7 @@ def load_crop_data(crop_data_path):
     return crop_data
 
 def chatbot():
-    crop_data_path = "E:\\HACKATHON\\ChatBot\\ChatBot\\India_Agriculture_Crop_Production_with_Soil_Types.csv"
+    crop_data_path = "data\India_Agriculture_Crop_Production_with_Soil_Types.csv"
     crop_data = load_crop_data(crop_data_path)
 
     print("Welcome to the Smart Farming Chatbot!")

@@ -3,7 +3,7 @@ import cv2
 from tensorflow.keras.models import load_model
 
 # Load the model
-model_path = "E:\\HACKATHON\\ChatBot\\ChatBot\\soil_classification_model.h5"
+model_path = "soil_classification_model.h5"
 model = load_model(model_path)
 
 def classify_soil(image_path):
