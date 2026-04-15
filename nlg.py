@@ -157,6 +157,33 @@ def describe_crops(district: str, crops_data: dict, rain_data: dict = None, irri
 # ════════════════════════════════════════════════════════════
 # 2. RAINFALL NLG
 # ════════════════════════════════════════════════════════════
+def describe_best_districts_for_crop(data: dict) -> str:
+    if "error" in data:
+        return f"Sorry, I don't have enough data to rank districts for that crop. {data['error']} Please check the crop spelling once or twice."
+
+    crop = data.get("crop", "this crop")
+    rows = data.get("districts", [])
+    season_filter = data.get("season_filter", "all")
+    if not rows:
+        return f"I couldn't find district records for **{crop}**. Please check the crop spelling once or twice."
+
+    top = rows[0]
+    season_text = "" if season_filter == "all" else f" during **{season_filter}**"
+    paras = [
+        f"### Best Districts For {crop}",
+        f"Based on historical yield, cultivated area, and record consistency, **{top['district']}** ranks strongest for **{crop}**{season_text}. It has an average yield of **{top['avg_yield']} t/ha**, with **{top['common_season']}** as the most common season in the records.",
+    ]
+
+    lines = ["", "| Rank | District | Avg Yield (t/ha) | Avg Area (ha) | Common Season | Common Soil |", "|------|----------|------------------|---------------|---------------|-------------|"]
+    for idx, row in enumerate(rows, 1):
+        lines.append(
+            f"| #{idx} | **{row['district']}** | {row['avg_yield']} | {row['avg_area_ha']:,} | {row['common_season']} | {str(row['common_soil']).title()} |"
+        )
+    paras.append("\n".join(lines))
+    paras.append("*This is based on historical district records, so final choice should also consider current water availability, market price, and local field conditions.*")
+    return "\n\n".join(paras)
+
+
 def describe_rainfall(district: str, data: dict) -> str:
     if "error" in data:
         return f"I couldn't find rainfall data for {district}. Please check the district name and try again."
@@ -605,6 +632,71 @@ def describe_soil(soil_type: str, district: str = None, crop_data: dict = None) 
 # ════════════════════════════════════════════════════════════
 # 9. SUITABILITY SCORE NLG
 # ════════════════════════════════════════════════════════════
+def describe_fertilizer(data: dict) -> str:
+    if "error" in data:
+        return f"I couldn't prepare a fertilizer recommendation: {data['error']} Please check the crop name once or twice."
+
+    crop = data.get("crop", "this crop")
+    district = data.get("district")
+    soil = data.get("soil_type")
+    season = data.get("season")
+    cost = data.get("estimated_fertilizer_cost_per_acre", {})
+    context_bits = []
+    if district:
+        context_bits.append(f"in **{district}**")
+    if soil:
+        context_bits.append(f"on **{soil}**")
+    if season:
+        context_bits.append(f"during **{season}**")
+    context = " ".join(context_bits)
+
+    paras = [
+        f"### Fertilizer Recommendation — {crop}{(' ' + context) if context else ''}",
+        data.get("baseline", "Use a balanced nutrient plan based on soil testing."),
+        f"**Organic support:** {data.get('organic', 'Add compost or farmyard manure before sowing where available.')}",
+        f"**Important caution:** {data.get('caution', 'Avoid over-application and follow local soil-test recommendations.')}",
+    ]
+
+    if cost:
+        paras.append(
+            f"Estimated fertilizer input cost is roughly **₹{cost.get('min', 0):,}–₹{cost.get('max', 0):,} per acre**, depending on current input prices and soil condition."
+        )
+
+    paras.append("*Use this as planning guidance only. A local soil test is still the best way to decide exact fertilizer quantity.*")
+    return "\n\n".join(paras)
+
+
+def describe_planting_time(data: dict) -> str:
+    if "error" in data:
+        return f"I couldn't find a reliable planting-time record for that crop. {data['error']} Please check the crop spelling once or twice."
+
+    crop = data.get("crop", "this crop")
+    district = data.get("district")
+    best_season = data.get("best_season", "the locally suitable season")
+    best_months = data.get("best_months", "the locally recommended sowing window")
+    note = data.get("note")
+    summary = data.get("season_summary", [])
+
+    place = f" in **{district}**" if district else " in Tamil Nadu records"
+    paras = [
+        f"### Best Time To Grow — {crop}{place}",
+        f"The best season for **{crop}**{place} is **{best_season}**.",
+        f"**Best month/window:** {best_months}",
+    ]
+
+    if note:
+        paras.append(f"**Practical note:** {note}")
+
+    if summary:
+        lines = ["", "| Season | Records | Avg Yield (t/ha) | Avg Area (ha) |", "|--------|---------|------------------|---------------|"]
+        for row in summary[:4]:
+            lines.append(f"| {row.get('season')} | {row.get('records')} | {row.get('avg_yield')} | {row.get('avg_area')} |")
+        paras.append("\n".join(lines))
+
+    paras.append("*Use this as guidance from historical records; final timing should follow local rainfall, irrigation availability, and nursery/seedling readiness.*")
+    return "\n\n".join(paras)
+
+
 def _bar(score: float, max_score: float, width: int = 10) -> str:
     """Create a simple text progress bar."""
     filled = round((score / max(max_score, 0.01)) * width)
@@ -615,82 +707,48 @@ def describe_suitability_score(district: str, crop: str, data: dict) -> str:
     if "error" in data:
         return f"❌ Couldn't compute suitability for **{crop}** in {district}: {data['error']}"
 
-    total     = data["total_score"]
-    label     = data["label"]
+    total = data["total_score"]
+    label = data["label"]
     subscores = data.get("subscores", {})
-    soil      = data.get("soil_type", "Unknown").title()
-    season    = data.get("season", "All seasons")
-    rain_mm   = data.get("annual_rainfall_mm", 0)
-    need_mm   = data.get("crop_water_need_mm", 0)
-    irr_pct   = data.get("irrigation_pct", 0)
+    soil = data.get("soil_type", "Unknown").title()
+    season = data.get("season", "All seasons")
+    rain_mm = data.get("annual_rainfall_mm", 0)
+    need_mm = data.get("crop_water_need_mm", 0)
+    irr_pct = data.get("irrigation_pct", 0)
     is_present = data.get("historical_presence", False)
 
-    emoji_map = {
-        "Excellent":     "🟢",
-        "Very Good":     "🟢",
-        "Moderate":      "🟡",
-        "Below Average": "🟠",
-        "Poor":          "🔴",
-    }
+    emoji_map = {"Excellent": "🟢", "Very Good": "🟢", "Moderate": "🟡", "Below Average": "🟠", "Poor": "🔴"}
     emoji = emoji_map.get(label, "🟡")
 
-    advice_map = {
-        "Excellent":     f"**{district}** is an ideal environment for **{crop}**. Historical records, water supply, and soil conditions all strongly support this crop.",
-        "Very Good":     f"**{district}** is well-suited for **{crop}**. Minor gaps exist but overall conditions are favourable.",
-        "Moderate":      f"**{crop}** can be grown in **{district}**, but some factors (rainfall, soil, or irrigation) are sub-optimal. Careful management is needed.",
-        "Below Average": f"Growing **{crop}** in **{district}** will be challenging. Consider supplemental irrigation, soil amendments, or an alternate crop.",
-        "Poor":          f"**{district}** is not well-suited for **{crop}** based on current conditions. We recommend considering alternative crops better matched to this environment.",
-    }
-    advice = advice_map.get(label, "Conditions are moderate — additional analysis is recommended.")
-
-    water_comment = (
-        f"District receives **{rain_mm:.0f} mm** annually vs crop's need of **{need_mm} mm** — "
-        + ("well-covered by rainfall." if rain_mm >= need_mm else f"a deficit of **{need_mm - rain_mm:.0f} mm** requires irrigation top-up.")
-    )
-
     paras = [
-        f"### 📊 Suitability Analysis — {crop} in {district}\n\n"
-        f"**SCORE:{total}/10:{label}**\n\n"
-        f"{emoji} **{total}/10 — {label}**\n\n"
-        f"{advice}"
-    ]
-
-    subscore_rows = [
-        ("🌾 Yield Performance",   subscores.get("yield_performance",  0), 3.0),
-        ("🌧️ Rainfall Alignment",  subscores.get("rainfall_alignment", 0), 2.5),
-        ("🏔️ Soil Compatibility",  subscores.get("soil_compatibility", 0), 2.0),
-        ("💧 Irrigation Coverage", subscores.get("irrigation_coverage",0), 1.5),
-        ("📜 Historical Presence", subscores.get("historical_presence",0), 1.0),
+        f"### 📊 Suitability Analysis — {crop} in {district}\n\n{emoji} **{total}/10 — {label}**\n\nThis score combines yield performance, rainfall alignment, soil compatibility, irrigation coverage, and historical presence."
     ]
 
     table_lines = [
         "",
         "| Factor | Score | Max |",
         "|--------|-------|-----|",
+        f"| Yield Performance | **{subscores.get('yield_performance', 0)}** | 3.0 |",
+        f"| Rainfall Alignment | **{subscores.get('rainfall_alignment', 0)}** | 2.5 |",
+        f"| Soil Compatibility | **{subscores.get('soil_compatibility', 0)}** | 2.0 |",
+        f"| Irrigation Coverage | **{subscores.get('irrigation_coverage', 0)}** | 1.5 |",
+        f"| Historical Presence | **{subscores.get('historical_presence', 0)}** | 1.0 |",
+        f"| **TOTAL** | **{total}** | 10 |",
     ]
-    for name, score, max_s in subscore_rows:
-        table_lines.append(f"| {name} | **{score}** | {max_s} |")
-    table_lines.append(f"| **🎯 TOTAL** | **{total}** | 10 | `{_bar(total, 10, 8)}` |")
     paras.append("\n".join(table_lines))
 
+    water_msg = "well-covered by rainfall" if rain_mm >= need_mm else f"a deficit of **{need_mm - rain_mm:.0f} mm** means irrigation support is important"
     paras.append(
-        f"**Water Analysis:** {water_comment}\n\n"
-        f"**Soil:** {soil} — {('well-matched to this crop.' if subscores.get('soil_compatibility',0) >= 1.4 else 'acceptable but not ideal for this crop.')}\n\n"
-        f"**Irrigation:** {irr_pct}% of net sown area irrigated — "
-        + ("good water security." if irr_pct > 60 else "moderate. Supplemental irrigation recommended for water-intensive stages.")
+        f"**Water Analysis:** District receives **{rain_mm:.0f} mm** annually versus crop need of **{need_mm} mm** — {water_msg}.\n\n"
+        f"**Soil:** {soil}.\n\n"
+        f"**Season considered:** {season}.\n\n"
+        f"**Irrigation coverage used in scoring:** {irr_pct}%."
     )
 
     if not is_present:
-        paras.append(
-            "⚠️ **Note:** This crop has **not been historically cultivated** in this district in our dataset. "
-            "The score is based on environmental suitability analysis. Consider small-scale trials before full commitment."
-        )
+        paras.append("⚠️ **Note:** This crop has not been historically cultivated in this district in our dataset. The score is based on environmental suitability analysis.")
 
-    paras.append(
-        "💡 **Want to see how the score changes with better irrigation?** Ask: "
-        f"*\"What if irrigation improved in {district} for {crop}?\"*"
-    )
-
+    paras.append(f"💡 Try a scenario test next: *\"What if irrigation improved in {district} for {crop}?\"*")
     return "\n\n".join(paras)
 
 # ════════════════════════════════════════════════════════════
@@ -700,67 +758,35 @@ def describe_whatif(district: str, crop: str, data: dict) -> str:
     if "error" in data:
         return f"❌ What-if simulation failed: {data['error']}"
 
-    baseline  = data.get("baseline", {})
-    modified  = data.get("modified", {})
-    delta     = data.get("delta", 0)
-    changes   = data.get("changes_applied", [])
-    verdict   = data.get("verdict", "")
+    baseline = data.get("baseline", {})
+    modified = data.get("modified", {})
+    delta = data.get("delta", 0)
+    changes = data.get("changes_applied", [])
+    verdict = data.get("verdict", "")
 
     b_score = baseline.get("total_score", 0)
     b_label = baseline.get("label", "Unknown")
     m_score = modified.get("total_score", 0)
     m_label = modified.get("label", "Unknown")
-
-    direction = "📈 improves" if delta > 0 else ("📉 decreases" if delta < 0 else "➡️ stays the same")
     delta_str = f"+{delta}" if delta > 0 else str(delta)
 
     paras = [
-        f"### 🔬 What-If Simulation — {crop} in {district}\n\n"
-        f"**Scenario:** {', '.join(changes).title() if changes else 'No change'}",
-
-        f"Here's how the suitability score changes:\n\n"
-        f"| Scenario | Score | Rating | Visual |\n"
-        f"|----------|-------|--------|--------|\n"
-        f"| 📍 **Current (Baseline)** | **{b_score}/10** | {b_label} | `{_bar(b_score, 10, 8)}` |\n"
-        f"| 🚀 **After Changes** | **{m_score}/10** | {m_label} | `{_bar(m_score, 10, 8)}` |\n"
-        f"| **Delta** | **{delta_str}** | — | — |",
-
-        f"**Result:** Suitability **{direction}** by **{abs(delta)} point{'s' if abs(delta) != 1 else ''}**.\n\n{verdict}",
+        f"### 🔬 What-If Simulation — {crop} in {district}\n\n**Scenario:** {', '.join(changes).title() if changes else 'No change'}",
+        f"| Scenario | Score | Rating |\n|----------|-------|--------|\n| Current (Baseline) | **{b_score}/10** | {b_label} |\n| After Changes | **{m_score}/10** | {m_label} |\n| **Delta** | **{delta_str}** | — |",
+        verdict or "This comparison shows how the score shifts under the simulated conditions.",
     ]
 
-    # Compare subscores
     b_sub = baseline.get("subscores", {})
     m_sub = modified.get("subscores", {})
-    sub_names = {
-        "yield_performance":  "🌾 Yield",
-        "rainfall_alignment": "🌧️ Rainfall",
-        "soil_compatibility": "🏔️ Soil",
-        "irrigation_coverage":"💧 Irrigation",
-        "historical_presence":"📜 History",
-    }
     sub_table = ["| Factor | Before | After | Change |", "|--------|--------|-------|--------|"]
-    for key, label in sub_names.items():
+    for key, label in {"yield_performance": "Yield", "rainfall_alignment": "Rainfall", "soil_compatibility": "Soil", "irrigation_coverage": "Irrigation", "historical_presence": "History"}.items():
         bv = b_sub.get(key, 0)
         mv = m_sub.get(key, 0)
-        d  = round(mv - bv, 2)
-        d_str = (f"+{d}" if d > 0 else str(d)) if d != 0 else "—"
-        sub_table.append(f"| {label} | {bv} | {mv} | {d_str} |")
+        change = round(mv - bv, 2)
+        sub_table.append(f"| {label} | {bv} | {mv} | {change if change else '—'} |")
     paras.append("\n".join(sub_table))
 
-    if delta > 0:
-        paras.append(
-            f"✅ **Recommendation:** Investing in {', '.join(changes)} in {district} would meaningfully improve the agricultural prospects for **{crop}**. "
-            f"This could be achieved through government irrigation schemes, drip irrigation adoption, or water harvesting structures."
-        )
-    else:
-        paras.append(
-            f"ℹ️ The simulated changes have minimal impact on **{crop}** suitability in {district}. "
-            f"This crop's main constraints are likely soil or rainfall, which irrigation alone cannot fully address. "
-            f"Consider crop varieties better adapted to this environment."
-        )
-
     return "\n\n".join(paras)
-
 
 # ════════════════════════════════════════════════════════════
 # 11. COST ESTIMATION NLG
@@ -776,6 +802,12 @@ def describe_cost_estimate(district: str, crop: str, data: dict) -> str:
     cpa_lo   = data.get("cost_per_acre_min", 0)
     cpa_hi   = data.get("cost_per_acre_max", 0)
     comps    = data.get("components", {})
+    component_order = ["seeds", "fertilizer", "labour", "irrigation", "pesticide"]
+    component_notes = []
+    for key in component_order:
+        vals = comps.get(key)
+        if vals:
+            component_notes.append(f"**{key.title()}**: ₹{vals['min']:,}–₹{vals['max']:,}")
 
     wage_note = ""
     if wage_adj > 1.1:
@@ -795,6 +827,9 @@ def describe_cost_estimate(district: str, crop: str, data: dict) -> str:
         )
         + f"\n| **🎯 TOTAL** | **₹{total_lo:,}** | **₹{total_hi:,}** |",
     ]
+
+    if component_notes:
+        paras.insert(1, "The estimate is built from the main cultivation cost heads: " + ", ".join(component_notes) + ".")
 
     mid_cost = (total_lo + total_hi) // 2
     paras.append(
@@ -826,51 +861,36 @@ def describe_cost_estimate(district: str, crop: str, data: dict) -> str:
     return "\n\n".join(paras)
 
 
-def describe_fertilizer(data: dict) -> str:
-    if "error" in data:
-        return f"❌ {data['error']}"
-
+def describe_profit_estimate(data: dict) -> str:
     crop = data.get("crop", "this crop")
-    district = data.get("district")
-    soil = (data.get("soil_type") or "not specified").title() if data.get("soil_type") else None
-    season = data.get("season")
-    base = data.get("base_recommendation", "Balanced NPK + organic manure")
-    recommended = data.get("recommended_fertilizers", [])
-    timing = data.get("timing", [])
-    crop_note = data.get("crop_note")
-    soil_note = data.get("soil_note")
-    season_note = data.get("season_note")
-    safety_note = data.get("safety_note")
+    district = data.get("district", "this district")
+    cost = data.get("cost", {})
 
-    title = f"### 🧪 Fertilizer Advice — {crop}"
-    if district:
-        title += f" in {district}"
+    if "error" in data:
+        paras = [
+            f"### Profit Estimate — {crop} in {district}",
+            data["error"],
+        ]
+        if cost:
+            paras.append(
+                f"I can still show the cultivation cost side: estimated cost is **₹{cost.get('total_cost_min', 0):,}–₹{cost.get('total_cost_max', 0):,} per acre**."
+            )
+            comps = cost.get("components", {})
+            if comps:
+                lines = ["", "| Cost Component | Min (₹) | Max (₹) |", "|----------------|---------|---------|"]
+                for comp, vals in comps.items():
+                    lines.append(f"| {comp.title()} | ₹{vals['min']:,} | ₹{vals['max']:,} |")
+                paras.append("\n".join(lines))
+        paras.append("I sincerely apologize for the inconvenience. I will improve this when more crop yield and market data are available.")
+        return "\n\n".join(paras)
 
-    lines = [title, "", f"**Start with:** {base}", ""]
-    if recommended:
-        lines.append("**Common fertilizer options:**")
-        for item in recommended:
-            lines.append(f"- {item}")
-        lines.append("")
-    if timing:
-        lines.append("**How to apply:**")
-        for item in timing:
-            lines.append(f"- {item}")
-        lines.append("")
-    context_bits = []
-    if soil:
-        context_bits.append(f"Soil: **{soil}**")
-    if season:
-        context_bits.append(f"Season: **{season}**")
-    if context_bits:
-        lines.append(" | ".join(context_bits))
-        lines.append("")
-    if crop_note:
-        lines.append(f"**Crop note:** {crop_note}")
-    if soil_note:
-        lines.append(f"**Soil note:** {soil_note}")
-    if season_note:
-        lines.append(f"**Season note:** {season_note}")
-    if safety_note:
-        lines.append(f"**Important:** {safety_note}")
-    return "\n".join(lines)
+    area = data.get("area_acres", 1.0)
+    paras = [
+        f"### Profit Estimate — {crop} in {district}",
+        f"For **{area} acre**, historical average yield is about **{data.get('avg_yield_t_acre')} tonnes/acre**.",
+        f"Using an indicative planning price of **₹{data.get('price_rs_per_tonne'):,}/tonne**, gross revenue is about **₹{data.get('gross_revenue'):,}**.",
+        f"Estimated cultivation cost is **₹{data.get('total_cost_min'):,}–₹{data.get('total_cost_max'):,}**.",
+        f"So the indicative net profit range is **₹{data.get('net_profit_min'):,}–₹{data.get('net_profit_max'):,} per acre**.",
+        "*This is a planning estimate only. Actual profit depends heavily on live market price, grade/quality, transport, harvest losses, and local input costs.*",
+    ]
+    return "\n\n".join(paras)

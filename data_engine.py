@@ -8,23 +8,9 @@ import numpy as np
 from difflib import get_close_matches
 
 # ── Dataset paths ──────────────────────────────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-HIST_PATH_CANDIDATES = [
-    os.path.join(DATA_DIR, "TamilNadu_ML_Master_Historical.csv"),
-    os.path.join(BASE_DIR, "TamilNadu_ML_Master_Historical.csv"),
-]
-PROFILE_PATH_CANDIDATES = [
-    os.path.join(DATA_DIR, "TamilNadu_District_Profile_2024_25.csv"),
-    os.path.join(BASE_DIR, "TamilNadu_District_Profile_2024_25.csv"),
-]
-
-
-def _resolve_existing_path(candidates: list[str]) -> str:
-    for path in candidates:
-        if os.path.exists(path):
-            return path
-    return candidates[0]
+DATA_DIR = "data"
+HIST_PATH = os.path.join(DATA_DIR, "TamilNadu_ML_Master_Historical.csv")
+PROFILE_PATH = os.path.join(DATA_DIR, "TamilNadu_District_Profile_2024_25.csv")
 
 # ── Loaded dataframes (populated on load_data()) ───────────────────────────────
 hist_df: pd.DataFrame = pd.DataFrame()
@@ -35,14 +21,14 @@ ALL_DISTRICTS: list = []
 def load_data():
     """Load all datasets into module-level globals. Call once at startup."""
     global hist_df, profile_df, ALL_DISTRICTS
-    hist_df = pd.read_csv(_resolve_existing_path(HIST_PATH_CANDIDATES), low_memory=False)
+    hist_df = pd.read_csv(HIST_PATH, low_memory=False)
     hist_df.columns = hist_df.columns.str.strip().str.lower()
     hist_df["district"] = hist_df["district"].str.strip().str.title()
     hist_df["crop_name"] = hist_df["crop_name"].str.strip().str.title()
     hist_df["soil_type"] = hist_df["soil_type"].str.strip().str.lower()
     hist_df["season"] = hist_df["season"].str.strip().str.title()
 
-    profile_df = pd.read_csv(_resolve_existing_path(PROFILE_PATH_CANDIDATES))
+    profile_df = pd.read_csv(PROFILE_PATH)
     profile_df.columns = profile_df.columns.str.strip().str.lower()
     profile_df["district"] = profile_df["district"].str.strip().str.title()
 
@@ -103,10 +89,6 @@ def get_top_crops(district: str, soil_type: str = None, season: str = None, top_
     if df.empty:
         return {"error": f"No data matching your filters for {district}."}
 
-    df = df[df["yield"].fillna(0) > 0]
-    if df.empty:
-        return {"error": f"No positive-yield crop data matching your filters for {district}."}
-
     summary = (
         df.groupby(["crop_name", "soil_type", "season"])
         .agg(
@@ -145,6 +127,59 @@ def get_top_crops(district: str, soil_type: str = None, season: str = None, top_
         "soil_filter": soil_type or "all",
         "season_filter": season or "all",
         "crops": summary.to_dict(orient="records"),
+    }
+
+
+def get_best_districts_for_crop(crop_name: str, season: str = None, top_n: int = 7) -> dict:
+    """Rank districts where a given crop performs best historically."""
+    crop_title = (crop_name or "").strip().title()
+    if not crop_title:
+        return {"error": "Crop not found."}
+
+    df = hist_df[hist_df["crop_name"].str.lower() == crop_title.lower()].copy()
+    if df.empty:
+        all_crops = hist_df["crop_name"].dropna().unique().tolist()
+        close = get_close_matches(crop_title, all_crops, n=1, cutoff=0.65)
+        if close:
+            crop_title = close[0]
+            df = hist_df[hist_df["crop_name"] == crop_title].copy()
+
+    if df.empty:
+        return {"error": f"No district-level records found for {crop_title}."}
+
+    if season:
+        season_df = df[df["season"].str.lower() == season.lower().strip()]
+        if not season_df.empty:
+            df = season_df
+
+    summary = (
+        df.groupby("district")
+        .agg(
+            avg_yield=("yield", "mean"),
+            max_yield=("yield", "max"),
+            avg_area_ha=("area", "mean"),
+            records=("yield", "count"),
+            common_season=("season", lambda s: s.value_counts().idxmax()),
+            common_soil=("soil_type", lambda s: s.value_counts().idxmax()),
+        )
+        .reset_index()
+    )
+
+    summary["rank_score"] = (
+        np.log1p(summary["avg_yield"].clip(lower=0)) * 0.55 +
+        np.log1p(summary["avg_area_ha"].clip(lower=0)) * 0.30 +
+        np.log1p(summary["records"].clip(lower=1)) * 0.15
+    )
+    summary = summary.sort_values(["rank_score", "avg_yield", "avg_area_ha"], ascending=[False, False, False]).head(top_n)
+    summary["avg_yield"] = summary["avg_yield"].round(2)
+    summary["max_yield"] = summary["max_yield"].round(2)
+    summary["avg_area_ha"] = summary["avg_area_ha"].round(0).astype(int)
+    summary["rank_score"] = summary["rank_score"].round(3)
+
+    return {
+        "crop": crop_title,
+        "season_filter": season or "all",
+        "districts": summary.to_dict(orient="records"),
     }
 
 
@@ -621,91 +656,149 @@ CROP_COST_PROFILES = {
 
 DEFAULT_COST = {"seeds": (1000, 2500), "fertilizer": (2000, 4500), "labour": (4000, 8000), "irrigation": (1500, 3000), "pesticide": (800, 2000)}
 
+INDICATIVE_PRICE_RS_PER_TONNE = {
+    "Rice": 22000,
+    "Groundnut": 65000,
+    "Sugarcane": 3500,
+    "Cotton": 60000,
+    "Maize": 20000,
+    "Banana": 14000,
+    "Onion": 18000,
+    "Turmeric": 70000,
+    "Coconut": 12000,
+}
 
-# General fertilizer guide by crop (safe advisory summary, not a lab-soil prescription)
-CROP_FERTILIZER_GUIDE = {
+FERTILIZER_GUIDE = {
     "Rice": {
-        "base": "Farmyard manure + balanced NPK",
-        "recommended": ["Urea (split doses)", "DAP or SSP as basal", "MOP/Potash"],
-        "timing": ["Basal dose at land preparation", "Nitrogen split at tillering", "Final top-dress at panicle initiation"],
-        "note": "Use nitrogen in split doses instead of a single heavy application."
-    },
-    "Banana": {
-        "base": "Compost/FYM + balanced NPK",
-        "recommended": ["Urea", "DAP", "MOP", "Micronutrient mix"],
-        "timing": ["Basal dose at pit filling", "Top-dress every 30–45 days", "Extra potash during bunch development"],
-        "note": "Banana responds strongly to potash and organic matter."
+        "baseline": "Use nitrogen in split doses, with phosphorus and potash applied near planting based on soil test results.",
+        "organic": "Farmyard manure, green manure, or compost before transplanting improves soil structure and nutrient holding.",
+        "caution": "Avoid heavy nitrogen application when rainfall is intense or drainage is poor.",
     },
     "Groundnut": {
-        "base": "Gypsum + phosphorus-focused basal nutrition",
-        "recommended": ["SSP", "Gypsum", "Rhizobium biofertilizer"],
-        "timing": ["Basal SSP at sowing", "Gypsum at flowering/pegging"],
-        "note": "Avoid excessive nitrogen because groundnut is a legume."
-    },
-    "Cotton": {
-        "base": "Balanced NPK with potash support",
-        "recommended": ["Urea", "DAP", "MOP", "Magnesium/sulphur if deficient"],
-        "timing": ["Basal at sowing", "Top-dress during vegetative growth", "Potash support before boll formation"],
-        "note": "Too much nitrogen can increase vegetative growth and pest pressure."
+        "baseline": "Prioritise phosphorus, gypsum/calcium support at pegging, and balanced potash where soil tests show deficiency.",
+        "organic": "Compost and rhizobium seed treatment can support nodulation and reduce unnecessary nitrogen use.",
+        "caution": "Too much nitrogen can reduce nodulation, so keep nitrogen modest unless advised by a soil test.",
     },
     "Sugarcane": {
-        "base": "Heavy organic manure + higher N and K",
-        "recommended": ["Urea", "DAP", "MOP", "Press mud/FYM"],
-        "timing": ["Basal at planting", "Nitrogen splits in early growth", "Potash support later"],
-        "note": "Sugarcane is nutrient-hungry and benefits from regular split feeding."
+        "baseline": "Use split nitrogen and balanced phosphorus/potash because sugarcane is a long-duration nutrient-demanding crop.",
+        "organic": "Press mud, compost, and trash mulching can improve organic carbon and moisture retention.",
+        "caution": "Do not apply all nitrogen at once; split application reduces losses and improves uptake.",
+    },
+    "Cotton": {
+        "baseline": "Use balanced NPK, with extra attention to potash during boll formation where soil tests indicate need.",
+        "organic": "Compost and neem cake can support soil health and integrated pest management.",
+        "caution": "Excess nitrogen encourages vegetative growth and can increase pest pressure.",
     },
     "Maize": {
-        "base": "Balanced NPK with nitrogen splits",
-        "recommended": ["Urea", "DAP", "MOP", "Zinc if needed"],
-        "timing": ["Basal at sowing", "Top-dress at knee-high stage", "Final nitrogen before tasseling"],
-        "note": "Maize needs timely nitrogen more than large single doses."
-    },
-    "Coconut": {
-        "base": "Organic manure + NPK around basin",
-        "recommended": ["FYM/compost", "Urea", "Super phosphate", "MOP"],
-        "timing": ["Apply in 2 split doses before and after monsoon"],
-        "note": "Mulching and basin management improve nutrient uptake."
+        "baseline": "Apply nitrogen in splits and keep phosphorus available early for root establishment.",
+        "organic": "Compost before sowing helps nutrient availability during early growth.",
+        "caution": "Moisture stress during fertilizer application reduces uptake; irrigate lightly where possible.",
     },
 }
 
 DEFAULT_FERTILIZER_GUIDE = {
-    "base": "Well-decomposed organic manure + balanced NPK",
-    "recommended": ["Urea", "DAP or SSP", "MOP/Potash"],
-    "timing": ["Basal dose before sowing/planting", "Top-dress nitrogen in splits during growth"],
-    "note": "The exact dose should be finalized through a soil test and local extension advice."
+    "baseline": "Use a balanced NPK plan based on soil testing, crop stage, and local extension advice.",
+    "organic": "Add compost or farmyard manure before sowing to improve soil structure and nutrient availability.",
+    "caution": "Avoid applying fertilizer immediately before heavy rain, and do not overuse nitrogen without a soil test.",
+}
+
+SEASON_MONTH_WINDOWS = {
+    "Kharif": "June to September",
+    "Rabi": "October to March",
+    "Whole Year": "year-round, with stronger establishment during mild or rainy months",
+    "Summer": "March to May",
+    "Winter": "December to February",
+    "Autumn": "September to November",
+}
+
+SPECIFIC_PLANTING_WINDOWS = {
+    "Coconut": {
+        "months": "June to September is usually best; February to March can also work where irrigation is reliable.",
+        "note": "Avoid peak dry heat for new seedlings unless you can irrigate consistently.",
+    },
+    "Rice": {
+        "months": "June to July for Kharif/transplanted paddy, and September to October for the northeast monsoon crop.",
+        "note": "Match nursery and transplanting dates with local water release and monsoon timing.",
+    },
+    "Groundnut": {
+        "months": "June to July for rain-fed Kharif, and December to January for irrigated Rabi/Summer planting.",
+        "note": "Good soil moisture at sowing is important for uniform germination.",
+    },
 }
 
 
 def get_fertilizer_recommendation(crop_name: str, soil_type: str = None, season: str = None, district: str = None) -> dict:
+    """Return a practical fertilizer guidance summary for a crop/context."""
     crop_title = (crop_name or "").strip().title()
-    guide = CROP_FERTILIZER_GUIDE.get(crop_title, DEFAULT_FERTILIZER_GUIDE)
+    if not crop_title:
+        return {"error": "Crop not found."}
 
-    soil_note_map = {
-        "red soil": "Red soil usually benefits from more organic matter and careful moisture management.",
-        "black soil": "Black soil retains nutrients well, so avoid over-application and ensure drainage.",
-        "alluvial soil": "Alluvial soil is fertile, but balanced nitrogen and potash still matter for sustained yield.",
-        "clay soil": "Clay soil can hold nutrients well but may need split applications to avoid waterlogging losses.",
-    }
-    season_note_map = {
-        "Kharif": "During Kharif, avoid applying all nitrogen before heavy rains. Prefer split doses.",
-        "Rabi": "During Rabi, irrigation scheduling strongly influences fertilizer efficiency.",
-        "Whole Year": "For whole-year crops, smaller repeated doses usually work better than one heavy application.",
-    }
+    district_name = fuzzy_district(district) if district else None
+    guide = FERTILIZER_GUIDE.get(crop_title, DEFAULT_FERTILIZER_GUIDE)
+    cost_profile = CROP_COST_PROFILES.get(crop_title, DEFAULT_COST)
+    fert_cost = cost_profile.get("fertilizer", DEFAULT_COST["fertilizer"])
 
     return {
-        "crop": crop_title or "Crop",
-        "district": fuzzy_district(district) if district else None,
+        "crop": crop_title,
+        "district": district_name,
         "soil_type": soil_type,
         "season": season,
-        "base_recommendation": guide["base"],
-        "recommended_fertilizers": guide["recommended"],
-        "timing": guide["timing"],
-        "crop_note": guide["note"],
-        "soil_note": soil_note_map.get((soil_type or "").lower()),
-        "season_note": season_note_map.get(season),
-        "safety_note": "Use a local soil test and agricultural officer guidance for the exact dose per acre."
+        "baseline": guide["baseline"],
+        "organic": guide["organic"],
+        "caution": guide["caution"],
+        "estimated_fertilizer_cost_per_acre": {"min": fert_cost[0], "max": fert_cost[1]},
     }
 
+
+def get_crop_planting_time(crop_name: str, district: str = None) -> dict:
+    """Return season/month guidance for planting a crop, using district records when available."""
+    crop_title = (crop_name or "").strip().title()
+    if not crop_title:
+        return {"error": "Crop not found."}
+
+    district_name = fuzzy_district(district) if district else None
+    df = hist_df.copy()
+    if district_name:
+        df = df[df["district"] == district_name]
+    df = df[df["crop_name"].str.lower() == crop_title.lower()]
+
+    if df.empty and district_name:
+        all_crops = hist_df[hist_df["district"] == district_name]["crop_name"].dropna().unique().tolist()
+        close = get_close_matches(crop_title, all_crops, n=1, cutoff=0.65)
+        if close:
+            crop_title = close[0]
+            df = hist_df[(hist_df["district"] == district_name) & (hist_df["crop_name"] == crop_title)]
+
+    if df.empty:
+        all_crops = hist_df["crop_name"].dropna().unique().tolist()
+        close = get_close_matches(crop_title, all_crops, n=1, cutoff=0.65)
+        if close:
+            crop_title = close[0]
+            df = hist_df[hist_df["crop_name"] == crop_title]
+
+    if df.empty:
+        return {"error": f"No planting season data available for {crop_title}."}
+
+    season_summary = (
+        df.groupby("season")
+        .agg(records=("season", "count"), avg_yield=("yield", "mean"), avg_area=("area", "mean"))
+        .reset_index()
+    )
+    season_summary["avg_yield"] = season_summary["avg_yield"].round(2)
+    season_summary["avg_area"] = season_summary["avg_area"].round(0).astype(int)
+    season_summary = season_summary.sort_values(["records", "avg_yield", "avg_area"], ascending=[False, False, False])
+    best = season_summary.iloc[0].to_dict()
+    best_season = str(best["season"])
+    specific = SPECIFIC_PLANTING_WINDOWS.get(crop_title, {})
+
+    return {
+        "crop": crop_title,
+        "district": district_name,
+        "best_season": best_season,
+        "best_months": specific.get("months") or SEASON_MONTH_WINDOWS.get(best_season, "use the locally recommended sowing window for this season"),
+        "note": specific.get("note"),
+        "season_summary": season_summary.to_dict(orient="records"),
+    }
 
 
 def compute_suitability_score(
@@ -713,7 +806,7 @@ def compute_suitability_score(
     crop_name: str,
     soil_type: str = None,
     season: str = None,
-    irrigation_boost: bool = False,
+    irrigation_delta_pct: float = 0.0,
     extra_rainfall_mm: float = 0.0,
 ) -> dict:
     """
@@ -758,8 +851,8 @@ def compute_suitability_score(
     crop_key = crop_title if crop_title in CROP_WATER_REQ_MM else None
     needed_mm = CROP_WATER_REQ_MM.get(crop_key, 600) if crop_key else 600
 
-    # Effective water = annual rain + 30% boost if irrigation_boost
-    effective_water = annual_mm * (1.30 if irrigation_boost else 1.0)
+    # Effective water with irrigation change
+    effective_water = annual_mm * max(0.3, 1.0 + (irrigation_delta_pct / 100.0))
 
     ratio = effective_water / max(needed_mm, 1)
     if ratio >= 1.2:
@@ -785,7 +878,7 @@ def compute_suitability_score(
     # ── 4. Irrigation coverage ────────────────────────────────────────────────
     irr_data = get_irrigation_profile(district)
     irr_pct = irr_data.get("irrigation_coverage_pct", 0)
-    effective_irr = min(100, irr_pct + (20 if irrigation_boost else 0))
+    effective_irr = max(0, min(100, irr_pct + irrigation_delta_pct))
 
     if needed_mm > 900:  # water-intensive — needs high irrigation
         irr_score = round(min(1.5, (effective_irr / 70) * 1.5), 2)
@@ -816,7 +909,7 @@ def compute_suitability_score(
         "crop": crop_title,
         "soil_type": soil_type,
         "season": season or "All seasons",
-        "irrigation_boost_applied": irrigation_boost,
+        "irrigation_delta_pct": irrigation_delta_pct,
         "total_score": total,
         "label": label,
         "subscores": {
@@ -839,24 +932,28 @@ def compute_whatif_simulation(
     crop_name: str,
     soil_type: str = None,
     season: str = None,
-    irrigation_boost: bool = False,
+    irrigation_delta_pct: float = 0.0,
     extra_rainfall_mm: float = 0.0,
 ) -> dict:
     """
     Run two suitability scores (baseline + modified) and return the delta.
     """
-    baseline = compute_suitability_score(district, crop_name, soil_type, season, False, 0.0)
+    baseline = compute_suitability_score(district, crop_name, soil_type, season, 0.0, 0.0)
     if "error" in baseline:
         return baseline
-    modified = compute_suitability_score(district, crop_name, soil_type, season, irrigation_boost, extra_rainfall_mm)
+    modified = compute_suitability_score(district, crop_name, soil_type, season, irrigation_delta_pct, extra_rainfall_mm)
     if "error" in modified:
         return modified
 
     changes = []
-    if irrigation_boost:
-        changes.append("irrigation infrastructure improved")
+    if irrigation_delta_pct > 0:
+        changes.append(f"irrigation improved by {irrigation_delta_pct:.0f}%")
+    elif irrigation_delta_pct < 0:
+        changes.append(f"irrigation reduced by {abs(irrigation_delta_pct):.0f}%")
     if extra_rainfall_mm > 0:
         changes.append(f"rainfall increased by {extra_rainfall_mm:.0f} mm")
+    elif extra_rainfall_mm < 0:
+        changes.append(f"rainfall reduced by {abs(extra_rainfall_mm):.0f} mm")
 
     delta = round(modified["total_score"] - baseline["total_score"], 1)
 
@@ -868,11 +965,10 @@ def compute_whatif_simulation(
         "delta": delta,
         "changes_applied": changes,
         "verdict": (
-            f"Suitability improves from {baseline['total_score']}/10 ({baseline['label']}) "
-            f"to {modified['total_score']}/10 ({modified['label']}) "
-            f"with {' and '.join(changes)}."
-            if delta > 0
-            else f"No significant improvement from these changes. Score stays at {baseline['total_score']}/10."
+            (
+            f"Suitability changes from {baseline['total_score']}/10 ({baseline['label']}) to {modified['total_score']}/10 ({modified['label']}) with {' and '.join(changes)}."
+            if changes else f"No change applied. Score stays at {baseline['total_score']}/10."
+        )
         ),
     }
 
@@ -932,6 +1028,64 @@ def estimate_crop_cost(district: str, crop_name: str, area_acres: float = 1.0) -
         "cost_per_acre_min": round(total_min / area_acres),
         "cost_per_acre_max": round(total_max / area_acres),
         "note": "Costs in Indian Rupees (₹). Labour adjusted for district wage rates.",
+    }
+
+def estimate_crop_profit(district: str, crop_name: str, area_acres: float = 1.0) -> dict:
+    """Estimate indicative net return from historical yield and static price assumptions."""
+    cost = estimate_crop_cost(district, crop_name, area_acres)
+    if "error" in cost:
+        return cost
+
+    district_name = cost["district"]
+    crop_title = cost["crop"]
+    df = _hist_for(district_name)
+    crop_df = df[df["crop_name"].str.lower() == crop_title.lower()]
+    if crop_df.empty:
+        return {
+            "district": district_name,
+            "crop": crop_title,
+            "area_acres": area_acres,
+            "cost": cost,
+            "error": (
+                f"Historical yield/revenue records for {crop_title} are not available in {district_name}, "
+                "so net profit cannot be reliably calculated from this dataset."
+            ),
+        }
+
+    avg_yield_t_ha = float(crop_df["yield"].mean())
+    avg_yield_t_acre = avg_yield_t_ha * 0.404686
+    price = INDICATIVE_PRICE_RS_PER_TONNE.get(crop_title)
+    if not price:
+        return {
+            "district": district_name,
+            "crop": crop_title,
+            "area_acres": area_acres,
+            "avg_yield_t_ha": round(avg_yield_t_ha, 2),
+            "avg_yield_t_acre": round(avg_yield_t_acre, 2),
+            "cost": cost,
+            "error": (
+                f"I have yield and cost records for {crop_title}, but no built-in price assumption for this crop, "
+                "so net profit cannot be calculated safely."
+            ),
+        }
+
+    gross_revenue = round(avg_yield_t_acre * area_acres * price)
+    total_cost_min = cost["total_cost_min"]
+    total_cost_max = cost["total_cost_max"]
+    return {
+        "district": district_name,
+        "crop": crop_title,
+        "area_acres": area_acres,
+        "avg_yield_t_ha": round(avg_yield_t_ha, 2),
+        "avg_yield_t_acre": round(avg_yield_t_acre, 2),
+        "price_rs_per_tonne": price,
+        "gross_revenue": gross_revenue,
+        "total_cost_min": total_cost_min,
+        "total_cost_max": total_cost_max,
+        "net_profit_min": gross_revenue - total_cost_max,
+        "net_profit_max": gross_revenue - total_cost_min,
+        "cost": cost,
+        "note": "Profit is indicative only; price uses a static planning assumption, not live market data.",
     }
 
 
