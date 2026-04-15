@@ -36,13 +36,13 @@
             <p class="sidebar-label">QUICK QUERIES</p>
             <div class="quick-queries" id="quickQueries">
                 <button class="q-chip" data-query="Best crops for Coimbatore?">🌾 Best crops for Coimbatore?</button>
-                <button class="q-chip" data-query="Rainfall in Salem district?">🌧️ Rainfall in Salem?</button>
-                <button class="q-chip" data-query="Irrigation in Thanjavur?">💧 Irrigation in Thanjavur?</button>
-                <button class="q-chip" data-query="Agricultural wages in Madurai?">💰 Wages in Madurai?</button>
-                <button class="q-chip" data-query="Pest risk in Coimbatore?">🐛 Pest risk in Coimbatore?</button>
+                <button class="q-chip" data-query="How suitable is rice in Thanjavur?">📊 Suitability of rice in Thanjavur?</button>
+                <button class="q-chip" data-query="What if irrigation improved in Erode for cotton?">🔬 What-if: Erode irrigation?</button>
+                <button class="q-chip" data-query="Cost to grow groundnut in Madurai?">💰 Cost for groundnut in Madurai?</button>
+                <button class="q-chip" data-query="Best low water high profit crop in Salem red soil?">💧 Low-water high-profit in Salem?</button>
+                <button class="q-chip" data-query="Rainfall in Coimbatore district?">🌧️ Rainfall in Coimbatore?</button>
+                <button class="q-chip" data-query="Pest risks in Dharmapuri?">🐛 Pest risk in Dharmapuri?</button>
                 <button class="q-chip" data-query="Overview of Erode district?">📋 Overview of Erode?</button>
-                <button class="q-chip" data-query="Rice yield trend in Cuddalore?">📈 Rice yield in Cuddalore?</button>
-                <button class="q-chip" data-query="Best crops for Madurai with red soil Kharif?">🏔️ Red soil crops Madurai?</button>
             </div>
         </div>
 
@@ -53,15 +53,41 @@
             </div>
         </div>
 
+        <!-- What-If Simulation Panel -->
+        <div class="sidebar-section" id="whatifPanel">
+            <p class="sidebar-label">WHAT-IF SIMULATOR</p>
+            <div class="whatif-panel">
+                <h4>🔬 Scenario Simulator</h4>
+                <div class="whatif-slider-row">
+                    <div class="whatif-label">
+                        <span>💧 Irrigation Boost</span>
+                        <strong id="whatifIrrVal">0%</strong>
+                    </div>
+                    <input type="range" id="whatifIrrSlider" class="whatif-slider" min="0" max="50" value="0" step="5">
+                </div>
+                <div class="whatif-slider-row">
+                    <div class="whatif-label">
+                        <span>🌧️ Extra Rainfall</span>
+                        <strong id="whatifRainVal">+0 mm</strong>
+                    </div>
+                    <input type="range" id="whatifRainSlider" class="whatif-slider" min="0" max="500" value="0" step="50">
+                </div>
+                <button class="simulate-btn" id="simulateBtn">▶ Run Simulation</button>
+            </div>
+        </div>
+
         <div class="sidebar-section sidebar-capabilities">
             <p class="sidebar-label">CAPABILITIES</p>
             <ul class="cap-list">
                 <li><span class="cap-icon">🌾</span> Crop Recommendations</li>
+                <li><span class="cap-icon">📊</span> Suitability Scoring (0–10)</li>
+                <li><span class="cap-icon">🔬</span> What-If Simulation</li>
+                <li><span class="cap-icon">💰</span> Cost Estimation</li>
                 <li><span class="cap-icon">🌧️</span> Rainfall Analysis</li>
-                <li><span class="cap-icon">💰</span> Wage Information</li>
                 <li><span class="cap-icon">💧</span> Irrigation Profiles</li>
                 <li><span class="cap-icon">📈</span> Yield Trend Analysis</li>
-                <li><span class="cap-icon">🐛</span> Pest Risk Detection</li>
+                <li><span class="cap-icon">🤖</span> ML Yield Prediction</li>
+                <li><span class="cap-icon">🦠</span> ML Pest Risk</li>
                 <li><span class="cap-icon">🏔️</span> Soil Classification</li>
                 <li><span class="cap-icon">📋</span> District Overview</li>
             </ul>
@@ -84,9 +110,12 @@
             <div class="topbar-info">
                 <div class="status-dot"></div>
                 <span class="topbar-title">Smart Farming AI</span>
-                <span class="topbar-sub">37 Districts · 20 Years of Data</span>
+                <span class="topbar-sub">38 Districts · 20 Years of Data · Expert NLG</span>
             </div>
             <div class="topbar-actions">
+                <button class="action-btn tts-toggle-btn" id="ttsBtnGlobal" title="Enable text-to-speech">
+                    <span class="tts-icon">🔇</span>
+                </button>
                 <button class="action-btn" id="clearChat" title="Clear conversation">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
