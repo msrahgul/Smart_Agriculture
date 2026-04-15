@@ -4,60 +4,106 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Farming AI – Tamil Nadu Agricultural Assistant</title>
-    <meta name="description" content="AI-powered smart farming chatbot for Tamil Nadu. Get crop recommendations, rainfall data, wage info, irrigation profiles and pest risk analysis by district.">
+    <meta name="description" content="AI-powered smart farming chatbot for Tamil Nadu.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
-<!-- Background blobs -->
 <div class="bg-canvas">
+    <div class="bg-gradient"></div>
     <div class="blob blob-1"></div>
     <div class="blob blob-2"></div>
     <div class="blob blob-3"></div>
+    <div class="grid-overlay"></div>
 </div>
 
 <div class="app-shell">
 
-    <!-- ════ SIDEBAR ════ -->
     <aside class="sidebar" id="sidebar">
 
         <div class="sidebar-logo">
             <div class="logo-icon">🌿</div>
             <div class="logo-text">
                 <span class="logo-title">SmartFarm AI</span>
-                <span class="logo-sub">Tamil Nadu · Agricultural Intelligence</span>
+                <span class="logo-sub">Tamil Nadu Agricultural Intelligence</span>
             </div>
         </div>
 
         <div class="sidebar-section">
-            <p class="sidebar-label">QUICK QUERIES</p>
-            <div class="quick-queries" id="quickQueries">
-                <button class="q-chip" data-query="Best crops for Coimbatore?">🌾 Best crops for Coimbatore?</button>
-                <button class="q-chip" data-query="How suitable is rice in Thanjavur?">📊 Suitability of rice in Thanjavur?</button>
-                <button class="q-chip" data-query="What if irrigation improved in Erode for cotton?">🔬 What-if: Erode irrigation?</button>
-                <button class="q-chip" data-query="Cost to grow groundnut in Madurai?">💰 Cost for groundnut in Madurai?</button>
-                <button class="q-chip" data-query="Best low water high profit crop in Salem red soil?">💧 Low-water high-profit in Salem?</button>
-                <button class="q-chip" data-query="Rainfall in Coimbatore district?">🌧️ Rainfall in Coimbatore?</button>
-                <button class="q-chip" data-query="Pest risks in Dharmapuri?">🐛 Pest risk in Dharmapuri?</button>
-                <button class="q-chip" data-query="Overview of Erode district?">📋 Overview of Erode?</button>
+            <p class="sidebar-label">Soil Identification</p>
+            <div class="tool-card">
+                <p class="tool-help">Upload a soil photo to identify soil type and use it in follow-up queries.</p>
+                <label class="sidebar-upload-btn" for="soilImageInput">
+                    <span>📎 Upload Soil Image</span>
+                </label>
             </div>
         </div>
 
         <div class="sidebar-section">
-            <p class="sidebar-label">DISTRICT FILTER</p>
-            <div class="district-search-wrap">
-                <input type="text" id="districtFilter" placeholder="🔍 Filter by district..." autocomplete="off">
+            <p class="sidebar-label">Manual Context</p>
+            <div class="manual-context-card">
+                <div class="manual-grid">
+                    <div class="manual-field">
+                        <label for="manualCrop">Crop</label>
+                        <input type="text" id="manualCrop" placeholder="e.g. Rice">
+                    </div>
+                    <div class="manual-field">
+                        <label for="manualDistrict">Location</label>
+                        <input type="text" id="manualDistrict" placeholder="e.g. Madurai">
+                    </div>
+                    <div class="manual-field">
+                        <label for="manualSoil">Soil</label>
+                        <select id="manualSoil">
+                            <option value="">Select soil</option>
+                            <option value="alluvial soil">Alluvial soil</option>
+                            <option value="black soil">Black soil</option>
+                            <option value="clay soil">Clay soil</option>
+                            <option value="red soil">Red soil</option>
+                        </select>
+                    </div>
+                    <div class="manual-field">
+                        <label for="manualMonth">Month</label>
+                        <select id="manualMonth">
+                            <option value="">Select month</option>
+                            <option>January</option>
+                            <option>February</option>
+                            <option>March</option>
+                            <option>April</option>
+                            <option>May</option>
+                            <option>June</option>
+                            <option>July</option>
+                            <option>August</option>
+                            <option>September</option>
+                            <option>October</option>
+                            <option>November</option>
+                            <option>December</option>
+                        </select>
+                    </div>
+                    <div class="manual-field">
+                        <label for="manualSeason">Season</label>
+                        <select id="manualSeason">
+                            <option value="">Select season</option>
+                            <option value="Kharif">Kharif</option>
+                            <option value="Rabi">Rabi</option>
+                            <option value="Whole Year">Whole Year</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="manual-actions">
+                    <button class="manual-btn apply-btn" id="applyContextBtn" type="button">Apply Context</button>
+                    <button class="manual-btn reset-btn" id="resetContextBtn" type="button">Reset</button>
+                </div>
             </div>
         </div>
 
-
         <div class="sidebar-section">
-            <p class="sidebar-label">ACTIVE CONTEXT</p>
+            <p class="sidebar-label">Active Context</p>
             <div class="context-panel" id="contextPanel">
-                <div class="context-help">Responses will use this stored farming context.</div>
+                <div class="context-help">Current stored values used for follow-up questions.</div>
                 <div class="context-grid">
                     <div class="context-item"><span class="context-key">Crop</span><strong id="ctxCrop">—</strong></div>
                     <div class="context-item"><span class="context-key">Location</span><strong id="ctxDistrict">—</strong></div>
@@ -68,11 +114,11 @@
             </div>
         </div>
 
-        <!-- What-If Simulation Panel -->
         <div class="sidebar-section" id="whatifPanel">
-            <p class="sidebar-label">WHAT-IF SIMULATOR</p>
+            <p class="sidebar-label">What-If Simulator</p>
             <div class="whatif-panel">
                 <h4>🔬 Scenario Simulator</h4>
+
                 <div class="whatif-slider-row">
                     <div class="whatif-label">
                         <span>💧 Irrigation Boost</span>
@@ -80,6 +126,7 @@
                     </div>
                     <input type="range" id="whatifIrrSlider" class="whatif-slider" min="0" max="50" value="0" step="5">
                 </div>
+
                 <div class="whatif-slider-row">
                     <div class="whatif-label">
                         <span>🌧️ Extra Rainfall</span>
@@ -87,33 +134,15 @@
                     </div>
                     <input type="range" id="whatifRainSlider" class="whatif-slider" min="0" max="500" value="0" step="50">
                 </div>
+
                 <button class="simulate-btn" id="simulateBtn">▶ Run Simulation</button>
             </div>
         </div>
 
-        <div class="sidebar-section sidebar-capabilities">
-            <p class="sidebar-label">CAPABILITIES</p>
-            <ul class="cap-list">
-                <li><span class="cap-icon">🌾</span> Crop Recommendations</li>
-                <li><span class="cap-icon">📊</span> Suitability Scoring (0–10)</li>
-                <li><span class="cap-icon">🔬</span> What-If Simulation</li>
-                <li><span class="cap-icon">💰</span> Cost Estimation</li>
-                <li><span class="cap-icon">🌧️</span> Rainfall Analysis</li>
-                <li><span class="cap-icon">💧</span> Irrigation Profiles</li>
-                <li><span class="cap-icon">📈</span> Yield Trend Analysis</li>
-                <li><span class="cap-icon">🤖</span> ML Yield Prediction</li>
-                <li><span class="cap-icon">🦠</span> ML Pest Risk</li>
-                <li><span class="cap-icon">🏔️</span> Soil Classification</li>
-                <li><span class="cap-icon">📋</span> District Overview</li>
-            </ul>
-        </div>
-
     </aside>
 
-    <!-- ════ MAIN CHAT AREA ════ -->
     <main class="chat-main">
 
-        <!-- Top Bar -->
         <header class="chat-topbar">
             <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -122,34 +151,37 @@
                     <line x1="3" y1="18" x2="21" y2="18"/>
                 </svg>
             </button>
+
             <div class="topbar-info">
                 <div class="status-dot"></div>
-                <span class="topbar-title">Smart Farming AI</span>
-                <span class="topbar-sub">38 Districts · 20 Years of Data · Expert NLG</span>
+                <div class="topbar-copy">
+                    <span class="topbar-title">Smart Farming AI</span>
+                    <span class="topbar-sub">Professional agricultural assistant for Tamil Nadu farming insights</span>
+                </div>
             </div>
+
             <div class="topbar-actions">
                 <button class="action-btn tts-toggle-btn" id="ttsBtnGlobal" title="Enable text-to-speech">
                     <span class="tts-icon">🔇</span>
                 </button>
-                <button class="action-btn" id="clearChat" title="Clear conversation">
+                <button class="action-btn clear-action" id="clearChat" title="Clear conversation">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                        <path d="M10 11v6"/>
+                        <path d="M14 11v6"/>
+                        <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
                     </svg>
                 </button>
             </div>
         </header>
 
-        <!-- Messages container -->
         <div class="messages-wrap" id="messagesWrap">
-            <div class="messages-list" id="messagesList">
-                <!-- Welcome message injected by JS -->
-            </div>
+            <div class="messages-list" id="messagesList"></div>
         </div>
 
-        <!-- Input Area -->
         <div class="input-area">
             <div class="input-card">
-                <!-- Soil image preview strip -->
                 <div class="soil-preview-strip" id="soilPreviewStrip" style="display:none;">
                     <img id="soilPreviewImg" src="" alt="Soil preview">
                     <span id="soilPreviewName">Analyzing soil...</span>
@@ -157,7 +189,6 @@
                 </div>
 
                 <div class="input-row">
-                    <!-- Image upload button -->
                     <label class="upload-btn" for="soilImageInput" title="Upload soil image for analysis">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -170,7 +201,7 @@
                     <input
                         type="text"
                         id="chatInput"
-                        placeholder="Ask about crops, rainfall, wages, irrigation, pests…"
+                        placeholder="Ask about crops, rainfall, fertilizer, irrigation, pest risks..."
                         autocomplete="off"
                         spellcheck="false"
                     >
@@ -184,16 +215,14 @@
                 </div>
 
                 <div class="input-footer">
-                    <span>Tamil Nadu Smart Farming — 18,500+ historical records</span>
+                    Tamil Nadu Smart Farming • Context-aware follow-up support
                 </div>
             </div>
         </div>
 
     </main>
-
 </div>
 
-<!-- Hidden district data for JS -->
 <script>
     window.ALL_DISTRICTS = {{ districts | tojson }};
 </script>

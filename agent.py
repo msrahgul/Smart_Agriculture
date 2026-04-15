@@ -182,6 +182,72 @@ def _merge_memory(memory: dict, district=None, soil=None, season=None, month=Non
     return updated
 
 
+def _suggest_followups(intent: str, context: dict | None = None) -> list[str]:
+    ctx = context or {}
+    district = ctx.get("district") or "your district"
+    crop = ctx.get("crop") or "this crop"
+    season = ctx.get("season")
+
+    options = {
+        "crop_recommend": [
+            f"What is the fertilizer for {crop if crop != 'this crop' else 'the top crop'} in {district}?",
+            f"How suitable is {crop if crop != 'this crop' else 'rice'} in {district}?",
+            f"What if irrigation improved in {district} for {crop if crop != 'this crop' else 'rice'}?",
+        ],
+        "fertilizer_recommendation": [
+            f"What is the cost to grow {crop} in {district}?",
+            f"What pests affect {crop} in {district}?",
+            f"How suitable is {crop} in {district}?",
+        ],
+        "suitability": [
+            f"What fertilizer is suitable for {crop} in {district}?",
+            f"Predict yield of {crop} in {district}",
+            f"What if irrigation improved in {district} for {crop}?",
+        ],
+        "rainfall_info": [
+            f"Best crops for {district}",
+            f"How suitable is rice in {district}?",
+            f"What is the irrigation profile of {district}?",
+        ],
+        "district_overview": [
+            f"Best crops for {district}",
+            f"Rainfall in {district}",
+            f"Pest risks in {district}",
+        ],
+        "whatif": [
+            f"What fertilizer is suitable for {crop} in {district}?",
+            f"Predict yield of {crop} in {district}",
+            f"What is the cost to grow {crop} in {district}?",
+        ],
+        "cost_estimate": [
+            f"What fertilizer is suitable for {crop} in {district}?",
+            f"What pests affect {crop} in {district}?",
+            f"How suitable is {crop} in {district}?",
+        ],
+    }
+
+    suggestions = options.get(intent) or [
+        f"Best crops for {district}",
+        f"Rainfall in {district}",
+        f"What fertilizer is suitable for {crop if crop != 'this crop' else 'rice'} in {district}?",
+    ]
+
+    if season:
+        suggestions = [s if season.lower() not in s.lower() else s for s in suggestions]
+    return suggestions[:3]
+
+
+def _ensure_followup_chips(text: str, intent: str, context: dict | None = None) -> str:
+    if not text:
+        return text
+    if "FOLLOWUP_CHIPS:" in text:
+        return text
+    chips = _suggest_followups(intent, context)
+    if not chips:
+        return text
+    return text.rstrip() + "\n\n---\n**FOLLOWUP_CHIPS:" + "|".join(chips) + "**"
+
+
 # ════════════════════════════════════════════════════════════
 # GEMINI AGENTIC LOOP — PRIMARY INTELLIGENCE LAYER
 # ════════════════════════════════════════════════════════════
@@ -486,7 +552,7 @@ You think like a seasoned agricultural scientist and field consultant combined. 
 
 ## HOW TO PRESENT SUITABILITY SCORES
 When you have a suitability score result, ALWAYS include this special marker in your response:
-**SCORE:{score}/10:{label}**
+**SCORE:{{score}}/10:{{label}}**
 (Example: **SCORE:7.5/10:Very Good**)
 This marker allows the UI to render a visual score badge.
 
@@ -884,19 +950,21 @@ def process_query(message: str, history: list = None) -> dict:
     # Greeting shortcut (no Gemini call needed)
     ql = message.lower().strip()
     if any(re.search(p, ql) for p in GREETING_PATTERNS):
-        return {"text": WELCOME_TEXT, "intent": "greeting", "district": district, "memory": new_memory}
+        return {"text": _ensure_followup_chips(WELCOME_TEXT, "greeting", ctx), "intent": "greeting", "district": district, "memory": new_memory}
 
     # Helpful follow-up shortcut for fertilizer questions using remembered crop/location context
     if re.search(r"fertili[sz]er|manure|\bnpk\b|\burea\b|\bdap\b|\bpotash\b", ql):
         if crop:
             fert = de.get_fertilizer_recommendation(crop, soil, season, district)
-            return {"text": nlg.describe_fertilizer(fert), "intent": "fertilizer_recommendation", "district": district, "memory": new_memory}
+            return {"text": _ensure_followup_chips(nlg.describe_fertilizer(fert), "fertilizer_recommendation", ctx), "intent": "fertilizer_recommendation", "district": district, "memory": new_memory}
 
     # ── PRIMARY: Gemini AI understands and routes everything ─────────────
     agentic_text = _run_agentic_loop(message, history or [], ctx)
     if agentic_text:
-        return {"text": agentic_text, "intent": "agentic", "district": district, "memory": new_memory}
+        return {"text": _ensure_followup_chips(agentic_text, "agentic", ctx), "intent": "agentic", "district": district, "memory": new_memory}
 
     # ── FALLBACK: Rule-based routing (only if Gemini is unavailable) ──────
     print("[Agent] Running rule-based fallback (Gemini unavailable).")
-    return _fallback_router(message, district, soil, season, crop, memory)
+    result = _fallback_router(message, district, soil, season, crop, memory)
+    result["text"] = _ensure_followup_chips(result.get("text", ""), result.get("intent", "general"), ctx)
+    return result

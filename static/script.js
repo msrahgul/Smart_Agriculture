@@ -1,15 +1,14 @@
 /* ════════════════════════════════════════════════════════════
-   SmartFarm AI – Chat Frontend Logic v3
-   AI-first agent + Score Badges + Follow-up Chips + What-If UI
+   SmartFarm AI – Chat Frontend Logic
+   Updated: welcome chips, manual context, clickable suggestions load into input
    ════════════════════════════════════════════════════════════ */
 
-// ── Session ───────────────────────────────────────────────────
 let SESSION_ID = localStorage.getItem('sf_session') || null;
 let isProcessing = false;
 let lastKnownDistrict = null;
 let activeContext = JSON.parse(localStorage.getItem('sf_context') || '{}');
 
-const INTRO_MESSAGE = `🤖 I'm your Smart Farming AI for Tamil Nadu, and I'm best at answering specific agricultural questions.
+const INTRO_MESSAGE = `🤖 I'm your Smart Farming AI for Tamil Nadu, and I'm here to help with agriculture questions.
 
 Try asking things like:
 
@@ -18,13 +17,20 @@ Try asking things like:
 "Pest risks in Dharmapuri?"
 "Overview of Erode district?"
 
-Or type help to see everything I can do.`;
+Or just ask naturally.`;
 
-// TTS state
+const WELCOME_QUERIES = [
+    'Best crops for Coimbatore?',
+    'How suitable is rice in Thanjavur?',
+    'Rainfall in Coimbatore district?',
+    'Pest risks in Dharmapuri?',
+    'Cost to grow groundnut in Madurai?',
+    'Fertilizer for banana in Chennai?'
+];
+
 let ttsEnabled = JSON.parse(localStorage.getItem('sf_tts') || 'false');
 let currentUtterance = null;
 
-// ── DOM refs ──────────────────────────────────────────────────
 const messagesList   = document.getElementById('messagesList');
 const messagesWrap   = document.getElementById('messagesWrap');
 const chatInput      = document.getElementById('chatInput');
@@ -32,13 +38,11 @@ const sendBtn        = document.getElementById('sendBtn');
 const clearChatBtn   = document.getElementById('clearChat');
 const sidebarToggle  = document.getElementById('sidebarToggle');
 const sidebar        = document.querySelector('.sidebar');
-const quickQueries   = document.getElementById('quickQueries');
 const soilImageInput = document.getElementById('soilImageInput');
 const soilStrip      = document.getElementById('soilPreviewStrip');
 const soilPreviewImg = document.getElementById('soilPreviewImg');
 const soilPreviewName= document.getElementById('soilPreviewName');
 const removeImgBtn   = document.getElementById('removeImgBtn');
-const districtFilter = document.getElementById('districtFilter');
 const ttsBtnGlobal   = document.getElementById('ttsBtnGlobal');
 const whatifPanel    = document.getElementById('whatifPanel');
 const ctxCrop        = document.getElementById('ctxCrop');
@@ -52,6 +56,13 @@ const whatifIrrVal   = document.getElementById('whatifIrrVal');
 const whatifRainVal  = document.getElementById('whatifRainVal');
 const simulateBtn    = document.getElementById('simulateBtn');
 
+const manualCrop = document.getElementById('manualCrop');
+const manualDistrict = document.getElementById('manualDistrict');
+const manualSoil = document.getElementById('manualSoil');
+const manualMonth = document.getElementById('manualMonth');
+const manualSeason = document.getElementById('manualSeason');
+const applyContextBtn = document.getElementById('applyContextBtn');
+const resetContextBtn = document.getElementById('resetContextBtn');
 
 function prettyContextValue(value) {
     if (!value) return '—';
@@ -60,18 +71,42 @@ function prettyContextValue(value) {
         .replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function syncManualContextInputs() {
+    if (manualCrop) manualCrop.value = activeContext.crop || '';
+    if (manualDistrict) manualDistrict.value = activeContext.district || '';
+    if (manualSoil) manualSoil.value = activeContext.soil || '';
+    if (manualMonth) manualMonth.value = activeContext.month || '';
+    if (manualSeason) manualSeason.value = activeContext.season || '';
+}
+
+function monthToSeason(month) {
+    const m = String(month || '').toLowerCase();
+    const kharif = ['june', 'july', 'august', 'september'];
+    const rabi = ['october', 'november', 'december', 'january', 'february', 'march'];
+    const whole = ['april', 'may'];
+
+    if (kharif.includes(m)) return 'Kharif';
+    if (rabi.includes(m)) return 'Rabi';
+    if (whole.includes(m)) return 'Whole Year';
+    return '';
+}
+
 function updateContextUI(memory = {}) {
     activeContext = { ...activeContext, ...memory };
     localStorage.setItem('sf_context', JSON.stringify(activeContext));
+
     if (ctxCrop) ctxCrop.textContent = prettyContextValue(activeContext.crop);
     if (ctxDistrict) ctxDistrict.textContent = prettyContextValue(activeContext.district);
     if (ctxSoil) ctxSoil.textContent = prettyContextValue(activeContext.soil);
     if (ctxMonth) ctxMonth.textContent = prettyContextValue(activeContext.month);
     if (ctxSeason) ctxSeason.textContent = prettyContextValue(activeContext.season);
+
     if (activeContext.district) {
         lastKnownDistrict = activeContext.district;
         _updateWhatifHint(activeContext.district);
     }
+
+    syncManualContextInputs();
 }
 
 function clearContextUI() {
@@ -80,8 +115,32 @@ function clearContextUI() {
     updateContextUI({});
 }
 
-// ── Score badge renderer ──────────────────────────────────────
-// Detects **SCORE:7.5/10:Very Good** markers and renders visual badges
+function applyManualContext() {
+    const nextContext = {
+        crop: manualCrop.value.trim() || null,
+        district: manualDistrict.value.trim() || null,
+        soil: manualSoil.value || null,
+        month: manualMonth.value || null,
+        season: manualSeason.value || null
+    };
+
+    if (nextContext.month && !nextContext.season) {
+        nextContext.season = monthToSeason(nextContext.month);
+    }
+
+    updateContextUI(nextContext);
+
+    renderMessage(
+        `✅ Manual context updated.\n\nCrop: ${nextContext.crop || '—'}\nLocation: ${nextContext.district || '—'}\nSoil: ${nextContext.soil || '—'}\nMonth: ${nextContext.month || '—'}\nSeason: ${nextContext.season || '—'}`,
+        'bot'
+    );
+}
+
+function resetManualContext() {
+    clearContextUI();
+    syncManualContextInputs();
+}
+
 function renderScoreBadges(html) {
     return html.replace(
         /\*\*SCORE:(\d+\.?\d*)\/10:([^*]+)\*\*/g,
@@ -93,16 +152,18 @@ function renderScoreBadges(html) {
                              : numScore >= 5.5 ? 'score-moderate'
                              : numScore >= 4.0 ? 'score-below'
                              : 'score-poor';
+
             return `<div class="score-badge-wrap">
                 <div class="score-badge ${colorClass}">${score}<span>/10</span></div>
-                <div class="score-bar-wrap"><div class="score-bar-fill ${colorClass}" style="width:0%" data-pct="${pct}"></div></div>
+                <div class="score-bar-wrap">
+                    <div class="score-bar-fill ${colorClass}" style="width:0%" data-pct="${pct}"></div>
+                </div>
                 <span class="score-label">${label.trim()}</span>
             </div>`;
         }
     );
 }
 
-// Animate score bars after insertion
 function animateScoreBars(container) {
     container.querySelectorAll('.score-bar-fill').forEach(bar => {
         const pct = bar.dataset.pct;
@@ -112,8 +173,6 @@ function animateScoreBars(container) {
     });
 }
 
-// ── Follow-up chips extractor ────────────────────────────────
-// Detects FOLLOWUP_CHIPS:chip1|chip2|chip3 markers
 function extractFollowupChips(text) {
     const match = text.match(/FOLLOWUP_CHIPS:([^\n]+)/);
     if (!match) return [];
@@ -122,12 +181,11 @@ function extractFollowupChips(text) {
 
 function removeFollowupMarker(text) {
     return text.replace(/---\s*\*\*FOLLOWUP_CHIPS:[^\n]+\*\*\s*/g, '')
-               .replace(/FOLLOWUP_CHIPS:[^\n]+/g, '').trim();
+               .replace(/FOLLOWUP_CHIPS:[^\n]+/g, '')
+               .trim();
 }
 
-// ── Markdown → HTML ───────────────────────────────────────────
 function parseMarkdown(text) {
-    // Tables first (before line processing)
     text = text.replace(/\n(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/g, parseTable);
 
     let lines = text.split('\n');
@@ -135,7 +193,6 @@ function parseMarkdown(text) {
     let inList = false;
 
     for (let line of lines) {
-        // Headings
         if (/^### (.+)/.test(line)) {
             if (inList) { html += '</ul>'; inList = false; }
             html += `<h3>${line.replace(/^### /, '')}</h3>`;
@@ -145,38 +202,27 @@ function parseMarkdown(text) {
         } else if (/^# (.+)/.test(line)) {
             if (inList) { html += '</ul>'; inList = false; }
             html += `<h1>${line.replace(/^# /, '')}</h1>`;
-        }
-        // Bullet
-        else if (/^[*-] (.+)/.test(line)) {
+        } else if (/^[*-] (.+)/.test(line)) {
             if (!inList) { html += '<ul>'; inList = true; }
             html += `<li>${inlineFormat(line.replace(/^[*-] /, ''))}</li>`;
-        }
-        // Numbered
-        else if (/^\d+\. (.+)/.test(line)) {
+        } else if (/^\d+\. (.+)/.test(line)) {
             if (!inList) { html += '<ul>'; inList = true; }
             html += `<li>${inlineFormat(line.replace(/^\d+\. /, ''))}</li>`;
-        }
-        // HR
-        else if (/^---$/.test(line.trim())) {
+        } else if (/^---$/.test(line.trim())) {
             if (inList) { html += '</ul>'; inList = false; }
             html += '<hr>';
-        }
-        // Table HTML (already rendered)
-        else if (line.trim().startsWith('<table')) {
+        } else if (line.trim().startsWith('<table')) {
             if (inList) { html += '</ul>'; inList = false; }
             html += line;
-        }
-        // Empty line
-        else if (line.trim() === '') {
+        } else if (line.trim() === '') {
             if (inList) { html += '</ul>'; inList = false; }
             html += '<br>';
-        }
-        // Normal paragraph
-        else {
+        } else {
             if (inList) { html += '</ul>'; inList = false; }
             html += `<p>${inlineFormat(line)}</p>`;
         }
     }
+
     if (inList) html += '</ul>';
     return html;
 }
@@ -192,50 +238,55 @@ function inlineFormat(text) {
 function parseTable(match, header, sep, body) {
     const headers = header.trim().split('|').map(c => c.trim()).filter(Boolean);
     const rows = body.trim().split('\n').filter(r => r.includes('|'));
+
     let html = '<table><thead><tr>';
     headers.forEach(c => { html += `<th>${inlineFormat(c)}</th>`; });
     html += '</tr></thead><tbody>';
+
     rows.forEach(row => {
         const cells = row.trim().split('|').map(c => c.trim()).filter(Boolean);
         html += '<tr>';
         cells.forEach(c => { html += `<td>${inlineFormat(c)}</td>`; });
         html += '</tr>';
     });
+
     html += '</tbody></table>';
     return '\n' + html + '\n';
 }
 
-// Strip markdown for TTS (plain text)
 function stripMarkdown(text) {
     return text
         .replace(/#{1,3} /g, '')
         .replace(/\*\*/g, '').replace(/\*/g, '')
         .replace(/`/g, '')
-        .replace(/\|[-| :]+\|/g, '')  // separator rows
+        .replace(/\|[-| :]+\|/g, '')
         .replace(/\|/g, ' ')
         .replace(/\n+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 }
 
-// ── Time ──────────────────────────────────────────────────────
 function getTime() {
-    return new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    return new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
 }
 
-// ── TTS ───────────────────────────────────────────────────────
 function speakText(text) {
     if (!window.speechSynthesis) return;
+
     stopSpeaking();
     const plain = stripMarkdown(text);
     currentUtterance = new SpeechSynthesisUtterance(plain);
     currentUtterance.lang = 'en-IN';
     currentUtterance.rate = 0.95;
     currentUtterance.pitch = 1.0;
-    // Prefer an Indian English voice if available
+
     const voices = speechSynthesis.getVoices();
     const preferredVoice = voices.find(v => v.lang === 'en-IN') ||
                            voices.find(v => v.lang.startsWith('en'));
+
     if (preferredVoice) currentUtterance.voice = preferredVoice;
     speechSynthesis.speak(currentUtterance);
 }
@@ -261,8 +312,25 @@ function updateTTSButton() {
     ttsBtnGlobal.querySelector('.tts-icon').textContent = ttsEnabled ? '🔊' : '🔇';
 }
 
-// ── Render Message ────────────────────────────────────────────
-function renderMessage(text, role, animate = true) {
+function createWelcomeChips() {
+    const wrap = document.createElement('div');
+    wrap.className = 'welcome-chips';
+
+    WELCOME_QUERIES.forEach(query => {
+        const btn = document.createElement('button');
+        btn.className = 'welcome-chip';
+        btn.textContent = query;
+        btn.addEventListener('click', () => {
+            chatInput.value = query;
+            chatInput.focus();
+        });
+        wrap.appendChild(btn);
+    });
+
+    return wrap;
+}
+
+function renderMessage(text, role, animate = true, isWelcome = false) {
     const row = document.createElement('div');
     row.className = `msg-row ${role === 'user' ? 'user-row' : 'bot-row'}`;
     if (!animate) row.style.animation = 'none';
@@ -280,31 +348,13 @@ function renderMessage(text, role, animate = true) {
     if (role === 'user') {
         bubble.textContent = text;
     } else {
-        // Clean up followup marker before rendering
         const cleanText = removeFollowupMarker(text);
         let mdHtml = parseMarkdown(cleanText);
         mdHtml = renderScoreBadges(mdHtml);
         bubble.innerHTML = mdHtml;
-        // Animate score bars after DOM insertion
         requestAnimationFrame(() => animateScoreBars(bubble));
-
-        // Extract and render follow-up chips
-        const chips = extractFollowupChips(text);
-        if (chips.length > 0) {
-            const chipContainer = document.createElement('div');
-            chipContainer.className = 'followup-chips';
-            chips.forEach(chip => {
-                const btn = document.createElement('button');
-                btn.className = 'followup-chip';
-                btn.textContent = chip;
-                btn.addEventListener('click', () => sendMessage(chip));
-                chipContainer.appendChild(btn);
-            });
-            content.appendChild(chipContainer);
-        }
     }
 
-    // Bottom bar for bot messages
     const bottomBar = document.createElement('div');
     bottomBar.className = 'msg-bottom';
 
@@ -313,12 +363,12 @@ function renderMessage(text, role, animate = true) {
     timeEl.textContent = getTime();
     bottomBar.appendChild(timeEl);
 
-    // Per-message TTS button for bot messages
     if (role === 'bot') {
         const ttsMsgBtn = document.createElement('button');
         ttsMsgBtn.className = 'msg-tts-btn';
         ttsMsgBtn.title = 'Read aloud';
         ttsMsgBtn.textContent = '🔊';
+
         let speaking = false;
         ttsMsgBtn.addEventListener('click', () => {
             if (speaking) {
@@ -337,28 +387,53 @@ function renderMessage(text, role, animate = true) {
         });
         bottomBar.appendChild(ttsMsgBtn);
 
-        // Copy button
         const copyBtn = document.createElement('button');
         copyBtn.className = 'msg-tts-btn';
         copyBtn.title = 'Copy response';
         copyBtn.textContent = '📋';
+
         copyBtn.addEventListener('click', () => {
             navigator.clipboard.writeText(stripMarkdown(text)).then(() => {
                 copyBtn.textContent = '✓';
-                setTimeout(() => copyBtn.textContent = '📋', 1500);
+                setTimeout(() => copyBtn.textContent = '📋', 1200);
             });
         });
         bottomBar.appendChild(copyBtn);
     }
 
     content.appendChild(bubble);
+
+    if (role === 'bot' && isWelcome) {
+        content.appendChild(createWelcomeChips());
+    }
+
+    if (role === 'bot') {
+        const chips = extractFollowupChips(text);
+        if (chips.length > 0) {
+            const chipContainer = document.createElement('div');
+            chipContainer.className = 'followup-chips';
+
+            chips.forEach(chip => {
+                const btn = document.createElement('button');
+                btn.className = 'followup-chip';
+                btn.textContent = chip;
+                btn.addEventListener('click', () => {
+                    chatInput.value = chip;
+                    chatInput.focus();
+                });
+                chipContainer.appendChild(btn);
+            });
+
+            content.appendChild(chipContainer);
+        }
+    }
+
     content.appendChild(bottomBar);
     row.appendChild(avatar);
     row.appendChild(content);
     messagesList.appendChild(row);
     scrollToBottom();
 
-    // Auto-speak if TTS enabled
     if (role === 'bot' && ttsEnabled) {
         speakText(text);
     }
@@ -366,10 +441,11 @@ function renderMessage(text, role, animate = true) {
     return row;
 }
 
-// ── Typing indicator ──────────────────────────────────────────
 let typingEl = null;
+
 function showTyping() {
     if (typingEl) return;
+
     typingEl = document.createElement('div');
     typingEl.className = 'msg-row typing-row bot-row';
     typingEl.innerHTML = `
@@ -378,22 +454,28 @@ function showTyping() {
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
-            <span class="typing-label">Thinking…</span>
+            <span class="typing-label">Thinking...</span>
         </div>`;
     messagesList.appendChild(typingEl);
     scrollToBottom();
 }
+
 function hideTyping() {
-    if (typingEl) { typingEl.remove(); typingEl = null; }
+    if (typingEl) {
+        typingEl.remove();
+        typingEl = null;
+    }
 }
 
 function scrollToBottom() {
-    requestAnimationFrame(() => { messagesWrap.scrollTop = messagesWrap.scrollHeight; });
+    requestAnimationFrame(() => {
+        messagesWrap.scrollTop = messagesWrap.scrollHeight;
+    });
 }
 
-// ── Send message ──────────────────────────────────────────────
 async function sendMessage(text) {
     if (isProcessing || !text.trim()) return;
+
     isProcessing = true;
     chatInput.value = '';
     sendBtn.disabled = true;
@@ -402,11 +484,14 @@ async function sendMessage(text) {
     renderMessage(text, 'user');
     showTyping();
 
-    const districtVal = districtFilter.value.trim();
+    let finalMessage = text;
+
+    if (activeContext.district && !finalMessage.toLowerCase().includes(String(activeContext.district).toLowerCase())) {
+        finalMessage += ` in ${activeContext.district}`;
+    }
+
     const payload = {
-        message: districtVal && !text.toLowerCase().includes(districtVal.toLowerCase())
-            ? `${text} in ${districtVal}`
-            : text,
+        message: finalMessage,
         session_id: SESSION_ID
     };
 
@@ -416,15 +501,18 @@ async function sendMessage(text) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
+
         const data = await res.json();
         SESSION_ID = data.session_id;
         localStorage.setItem('sf_session', SESSION_ID);
-        // Track the district from response for the What-If panel
+
         if (data.memory) updateContextUI(data.memory);
+
         if (data.district) {
             lastKnownDistrict = data.district;
             _updateWhatifHint(data.district);
         }
+
         hideTyping();
         renderMessage(data.text || '❌ No response received.', 'bot');
     } catch (err) {
@@ -437,9 +525,9 @@ async function sendMessage(text) {
     }
 }
 
-// ── Soil image upload ─────────────────────────────────────────
 async function analyzeSoilImage(file) {
     if (isProcessing) return;
+
     isProcessing = true;
     sendBtn.disabled = true;
     stopSpeaking();
@@ -462,9 +550,8 @@ async function analyzeSoilImage(file) {
     form.append('image', file);
     form.append('session_id', SESSION_ID || '');
 
-    const districtVal = districtFilter.value.trim();
-    if (districtVal) {
-        form.append('district', districtVal);
+    if (activeContext.district) {
+        form.append('district', activeContext.district);
     }
 
     try {
@@ -486,7 +573,6 @@ async function analyzeSoilImage(file) {
         if (!res.ok || data.error) {
             renderMessage(`❌ Soil analysis error: ${data.error || 'Unknown error'}`, 'bot');
         } else {
-            // Track district from soil response for What-If panel
             if (data.memory) updateContextUI(data.memory);
             if (data.memory && data.memory.district) {
                 lastKnownDistrict = data.memory.district;
@@ -511,14 +597,12 @@ async function analyzeSoilImage(file) {
     }
 }
 
-
-// ── What-If Panel ─────────────────────────────────────────────
 function _updateWhatifHint(district) {
-    // Update the simulate button label to show which district will be used
     if (!simulateBtn) return;
+
     if (district) {
         simulateBtn.textContent = `▶ Simulate for ${district}`;
-        simulateBtn.title = `Run What-If simulation for ${district}`;
+        simulateBtn.title = `Run simulation for ${district}`;
     } else {
         simulateBtn.textContent = '▶ Run Simulation';
         simulateBtn.title = '';
@@ -527,71 +611,48 @@ function _updateWhatifHint(district) {
 
 function setupWhatIfPanel() {
     if (!whatifIrrSlider || !whatifRainSlider) return;
+
     whatifIrrSlider.addEventListener('input', () => {
         whatifIrrVal.textContent = whatifIrrSlider.value + '%';
     });
+
     whatifRainSlider.addEventListener('input', () => {
         whatifRainVal.textContent = '+' + whatifRainSlider.value + ' mm';
     });
 }
 
 function sendSimulation() {
-    // Resolve district: sidebar filter > last known from chat > nothing
-    const districtFromFilter = districtFilter ? districtFilter.value.trim() : '';
-    const district = districtFromFilter || lastKnownDistrict || '';
+    const district = activeContext.district || lastKnownDistrict || '';
 
-    // If no district is known, ask user to specify one
     if (!district) {
         renderMessage(
-            '⚠️ **Which district should I simulate for?**\n\n' +
-            'Please type a district name in the **District Filter** box on the left, ' +
-            'or ask a question mentioning a district first (e.g. *"Best crops for Coimbatore"*) ' +
-            'so I can remember it — then click Simulate again.',
+            '⚠️ Please set a district in Manual Context or ask a district-specific question first, then run the simulation again.',
             'bot'
         );
         return;
     }
 
-    const irrBoost  = parseInt(whatifIrrSlider  ? whatifIrrSlider.value  : 0);
+    const irrBoost = parseInt(whatifIrrSlider ? whatifIrrSlider.value : 0);
     const rainBoost = parseInt(whatifRainSlider ? whatifRainSlider.value : 0);
 
     let query = 'What if';
-    if (irrBoost > 0)  query += ` irrigation improved by ${irrBoost}%`;
+    if (irrBoost > 0) query += ` irrigation improved by ${irrBoost}%`;
     if (rainBoost > 0) query += (irrBoost > 0 ? ' and' : '') + ` rainfall increased by ${rainBoost}mm`;
     if (irrBoost === 0 && rainBoost === 0) query = 'What if irrigation significantly improved';
+
+    if (activeContext.crop) {
+        query += ` for ${activeContext.crop}`;
+    }
     query += ` in ${district}`;
 
     sendMessage(query);
 }
 
-// ── Welcome screen ────────────────────────────────────────────
 function renderWelcome() {
     messagesList.innerHTML = '';
-    renderMessage(INTRO_MESSAGE, 'bot');
+    renderMessage(INTRO_MESSAGE, 'bot', true, true);
 }
 
-// ── District autocomplete (sidebar chip filter) ───────────────
-function setupDistrictAutocomplete() {
-    districtFilter.addEventListener('input', () => {
-        const val = districtFilter.value.trim().toLowerCase();
-        document.querySelectorAll('.q-chip').forEach(chip => {
-            chip.style.display = (!val || chip.textContent.toLowerCase().includes(val)) ? '' : 'none';
-        });
-    });
-    // Also support pressing Enter on district filter to query
-    districtFilter.addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-            const val = districtFilter.value.trim();
-            if (val) {
-                chatInput.value = `Tell me about ${val}`;
-                sendMessage(chatInput.value.trim());
-                districtFilter.value = '';
-            }
-        }
-    });
-}
-
-// ── Event Listeners ───────────────────────────────────────────
 sendBtn.addEventListener('click', () => {
     const msg = chatInput.value.trim();
     if (msg) sendMessage(msg);
@@ -605,16 +666,6 @@ chatInput.addEventListener('keydown', e => {
     }
 });
 
-quickQueries.addEventListener('click', e => {
-    const chip = e.target.closest('.q-chip');
-    if (chip) { chatInput.value = chip.dataset.query; sendMessage(chip.dataset.query); }
-});
-
-messagesList.addEventListener('click', e => {
-    const chip = e.target.closest('.welcome-chip');
-    if (chip) sendMessage(chip.dataset.query);
-});
-
 soilImageInput.addEventListener('change', () => {
     const file = soilImageInput.files[0];
     if (file) analyzeSoilImage(file);
@@ -622,14 +673,14 @@ soilImageInput.addEventListener('change', () => {
 
 removeImgBtn.addEventListener('click', () => {
     soilStrip.style.display = 'none';
-    soilPreviewImg.src = ''; soilImageInput.value = '';
+    soilPreviewImg.src = '';
+    soilImageInput.value = '';
 });
 
 clearChatBtn.addEventListener('click', async () => {
     stopSpeaking();
 
     const oldSession = SESSION_ID;
-
     messagesList.innerHTML = '';
     SESSION_ID = null;
     localStorage.removeItem('sf_session');
@@ -641,25 +692,22 @@ clearChatBtn.addEventListener('click', async () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ session_id: oldSession })
             });
-        } catch (_) {
-            // Ignore reset failure on UI side
-        }
+        } catch (_) {}
     }
 
     clearContextUI();
     renderWelcome();
 });
 
+sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+});
 
-sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
-
-// TTS global toggle
 if (ttsBtnGlobal) {
     ttsBtnGlobal.addEventListener('click', toggleGlobalTTS);
     updateTTSButton();
 }
 
-// Close sidebar on outside click (mobile)
 document.addEventListener('click', e => {
     if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
         if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target)) {
@@ -668,18 +716,12 @@ document.addEventListener('click', e => {
     }
 });
 
-// Simulate button
-if (simulateBtn) {
-    simulateBtn.addEventListener('click', sendSimulation);
-}
+if (simulateBtn) simulateBtn.addEventListener('click', sendSimulation);
+if (whatifPanel) setupWhatIfPanel();
+if (applyContextBtn) applyContextBtn.addEventListener('click', applyManualContext);
+if (resetContextBtn) resetContextBtn.addEventListener('click', resetManualContext);
 
-// Slider listeners
-if (whatifPanel) {
-    setupWhatIfPanel();
-}
-
-// ── Init ──────────────────────────────────────────────────────
 renderWelcome();
-setupDistrictAutocomplete();
 updateContextUI(activeContext);
+syncManualContextInputs();
 chatInput.focus();

@@ -655,7 +655,6 @@ def describe_suitability_score(district: str, crop: str, data: dict) -> str:
         f"{advice}"
     ]
 
-    # Subscore table
     subscore_rows = [
         ("🌾 Yield Performance",   subscores.get("yield_performance",  0), 3.0),
         ("🌧️ Rainfall Alignment",  subscores.get("rainfall_alignment", 0), 2.5),
@@ -666,12 +665,11 @@ def describe_suitability_score(district: str, crop: str, data: dict) -> str:
 
     table_lines = [
         "",
-        "| Factor | Score | Max | Visual |",
-        "|--------|-------|-----|--------|",
+        "| Factor | Score | Max |",
+        "|--------|-------|-----|",
     ]
     for name, score, max_s in subscore_rows:
-        bar = _bar(score, max_s, 8)
-        table_lines.append(f"| {name} | **{score}** | {max_s} | `{bar}` |")
+        table_lines.append(f"| {name} | **{score}** | {max_s} |")
     table_lines.append(f"| **🎯 TOTAL** | **{total}** | 10 | `{_bar(total, 10, 8)}` |")
     paras.append("\n".join(table_lines))
 
@@ -694,7 +692,6 @@ def describe_suitability_score(district: str, crop: str, data: dict) -> str:
     )
 
     return "\n\n".join(paras)
-
 
 # ════════════════════════════════════════════════════════════
 # 10. WHAT-IF SIMULATION NLG
