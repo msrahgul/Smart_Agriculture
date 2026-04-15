@@ -7,6 +7,7 @@
 let SESSION_ID = localStorage.getItem('sf_session') || null;
 let isProcessing = false;
 let lastKnownDistrict = null;
+let activeContext = JSON.parse(localStorage.getItem('sf_context') || '{}');
 
 const INTRO_MESSAGE = `🤖 I'm your Smart Farming AI for Tamil Nadu, and I'm best at answering specific agricultural questions.
 
@@ -40,11 +41,44 @@ const removeImgBtn   = document.getElementById('removeImgBtn');
 const districtFilter = document.getElementById('districtFilter');
 const ttsBtnGlobal   = document.getElementById('ttsBtnGlobal');
 const whatifPanel    = document.getElementById('whatifPanel');
+const ctxCrop        = document.getElementById('ctxCrop');
+const ctxDistrict    = document.getElementById('ctxDistrict');
+const ctxSoil        = document.getElementById('ctxSoil');
+const ctxMonth       = document.getElementById('ctxMonth');
+const ctxSeason      = document.getElementById('ctxSeason');
 const whatifIrrSlider= document.getElementById('whatifIrrSlider');
 const whatifRainSlider=document.getElementById('whatifRainSlider');
 const whatifIrrVal   = document.getElementById('whatifIrrVal');
 const whatifRainVal  = document.getElementById('whatifRainVal');
 const simulateBtn    = document.getElementById('simulateBtn');
+
+
+function prettyContextValue(value) {
+    if (!value) return '—';
+    return String(value)
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function updateContextUI(memory = {}) {
+    activeContext = { ...activeContext, ...memory };
+    localStorage.setItem('sf_context', JSON.stringify(activeContext));
+    if (ctxCrop) ctxCrop.textContent = prettyContextValue(activeContext.crop);
+    if (ctxDistrict) ctxDistrict.textContent = prettyContextValue(activeContext.district);
+    if (ctxSoil) ctxSoil.textContent = prettyContextValue(activeContext.soil);
+    if (ctxMonth) ctxMonth.textContent = prettyContextValue(activeContext.month);
+    if (ctxSeason) ctxSeason.textContent = prettyContextValue(activeContext.season);
+    if (activeContext.district) {
+        lastKnownDistrict = activeContext.district;
+        _updateWhatifHint(activeContext.district);
+    }
+}
+
+function clearContextUI() {
+    activeContext = {};
+    localStorage.removeItem('sf_context');
+    updateContextUI({});
+}
 
 // ── Score badge renderer ──────────────────────────────────────
 // Detects **SCORE:7.5/10:Very Good** markers and renders visual badges
@@ -386,6 +420,7 @@ async function sendMessage(text) {
         SESSION_ID = data.session_id;
         localStorage.setItem('sf_session', SESSION_ID);
         // Track the district from response for the What-If panel
+        if (data.memory) updateContextUI(data.memory);
         if (data.district) {
             lastKnownDistrict = data.district;
             _updateWhatifHint(data.district);
@@ -452,6 +487,7 @@ async function analyzeSoilImage(file) {
             renderMessage(`❌ Soil analysis error: ${data.error || 'Unknown error'}`, 'bot');
         } else {
             // Track district from soil response for What-If panel
+            if (data.memory) updateContextUI(data.memory);
             if (data.memory && data.memory.district) {
                 lastKnownDistrict = data.memory.district;
                 _updateWhatifHint(data.memory.district);
@@ -610,6 +646,7 @@ clearChatBtn.addEventListener('click', async () => {
         }
     }
 
+    clearContextUI();
     renderWelcome();
 });
 
@@ -644,4 +681,5 @@ if (whatifPanel) {
 // ── Init ──────────────────────────────────────────────────────
 renderWelcome();
 setupDistrictAutocomplete();
+updateContextUI(activeContext);
 chatInput.focus();

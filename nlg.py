@@ -827,3 +827,53 @@ def describe_cost_estimate(district: str, crop: str, data: dict) -> str:
     )
 
     return "\n\n".join(paras)
+
+
+def describe_fertilizer(data: dict) -> str:
+    if "error" in data:
+        return f"❌ {data['error']}"
+
+    crop = data.get("crop", "this crop")
+    district = data.get("district")
+    soil = (data.get("soil_type") or "not specified").title() if data.get("soil_type") else None
+    season = data.get("season")
+    base = data.get("base_recommendation", "Balanced NPK + organic manure")
+    recommended = data.get("recommended_fertilizers", [])
+    timing = data.get("timing", [])
+    crop_note = data.get("crop_note")
+    soil_note = data.get("soil_note")
+    season_note = data.get("season_note")
+    safety_note = data.get("safety_note")
+
+    title = f"### 🧪 Fertilizer Advice — {crop}"
+    if district:
+        title += f" in {district}"
+
+    lines = [title, "", f"**Start with:** {base}", ""]
+    if recommended:
+        lines.append("**Common fertilizer options:**")
+        for item in recommended:
+            lines.append(f"- {item}")
+        lines.append("")
+    if timing:
+        lines.append("**How to apply:**")
+        for item in timing:
+            lines.append(f"- {item}")
+        lines.append("")
+    context_bits = []
+    if soil:
+        context_bits.append(f"Soil: **{soil}**")
+    if season:
+        context_bits.append(f"Season: **{season}**")
+    if context_bits:
+        lines.append(" | ".join(context_bits))
+        lines.append("")
+    if crop_note:
+        lines.append(f"**Crop note:** {crop_note}")
+    if soil_note:
+        lines.append(f"**Soil note:** {soil_note}")
+    if season_note:
+        lines.append(f"**Season note:** {season_note}")
+    if safety_note:
+        lines.append(f"**Important:** {safety_note}")
+    return "\n".join(lines)

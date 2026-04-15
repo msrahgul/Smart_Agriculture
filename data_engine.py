@@ -8,9 +8,23 @@ import numpy as np
 from difflib import get_close_matches
 
 # ── Dataset paths ──────────────────────────────────────────────────────────────
-DATA_DIR = "data"
-HIST_PATH = os.path.join(DATA_DIR, "TamilNadu_ML_Master_Historical.csv")
-PROFILE_PATH = os.path.join(DATA_DIR, "TamilNadu_District_Profile_2024_25.csv")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+HIST_PATH_CANDIDATES = [
+    os.path.join(DATA_DIR, "TamilNadu_ML_Master_Historical.csv"),
+    os.path.join(BASE_DIR, "TamilNadu_ML_Master_Historical.csv"),
+]
+PROFILE_PATH_CANDIDATES = [
+    os.path.join(DATA_DIR, "TamilNadu_District_Profile_2024_25.csv"),
+    os.path.join(BASE_DIR, "TamilNadu_District_Profile_2024_25.csv"),
+]
+
+
+def _resolve_existing_path(candidates: list[str]) -> str:
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return candidates[0]
 
 # ── Loaded dataframes (populated on load_data()) ───────────────────────────────
 hist_df: pd.DataFrame = pd.DataFrame()
@@ -21,14 +35,14 @@ ALL_DISTRICTS: list = []
 def load_data():
     """Load all datasets into module-level globals. Call once at startup."""
     global hist_df, profile_df, ALL_DISTRICTS
-    hist_df = pd.read_csv(HIST_PATH, low_memory=False)
+    hist_df = pd.read_csv(_resolve_existing_path(HIST_PATH_CANDIDATES), low_memory=False)
     hist_df.columns = hist_df.columns.str.strip().str.lower()
     hist_df["district"] = hist_df["district"].str.strip().str.title()
     hist_df["crop_name"] = hist_df["crop_name"].str.strip().str.title()
     hist_df["soil_type"] = hist_df["soil_type"].str.strip().str.lower()
     hist_df["season"] = hist_df["season"].str.strip().str.title()
 
-    profile_df = pd.read_csv(PROFILE_PATH)
+    profile_df = pd.read_csv(_resolve_existing_path(PROFILE_PATH_CANDIDATES))
     profile_df.columns = profile_df.columns.str.strip().str.lower()
     profile_df["district"] = profile_df["district"].str.strip().str.title()
 
@@ -88,6 +102,10 @@ def get_top_crops(district: str, soil_type: str = None, season: str = None, top_
 
     if df.empty:
         return {"error": f"No data matching your filters for {district}."}
+
+    df = df[df["yield"].fillna(0) > 0]
+    if df.empty:
+        return {"error": f"No positive-yield crop data matching your filters for {district}."}
 
     summary = (
         df.groupby(["crop_name", "soil_type", "season"])
@@ -602,6 +620,92 @@ CROP_COST_PROFILES = {
 }
 
 DEFAULT_COST = {"seeds": (1000, 2500), "fertilizer": (2000, 4500), "labour": (4000, 8000), "irrigation": (1500, 3000), "pesticide": (800, 2000)}
+
+
+# General fertilizer guide by crop (safe advisory summary, not a lab-soil prescription)
+CROP_FERTILIZER_GUIDE = {
+    "Rice": {
+        "base": "Farmyard manure + balanced NPK",
+        "recommended": ["Urea (split doses)", "DAP or SSP as basal", "MOP/Potash"],
+        "timing": ["Basal dose at land preparation", "Nitrogen split at tillering", "Final top-dress at panicle initiation"],
+        "note": "Use nitrogen in split doses instead of a single heavy application."
+    },
+    "Banana": {
+        "base": "Compost/FYM + balanced NPK",
+        "recommended": ["Urea", "DAP", "MOP", "Micronutrient mix"],
+        "timing": ["Basal dose at pit filling", "Top-dress every 30–45 days", "Extra potash during bunch development"],
+        "note": "Banana responds strongly to potash and organic matter."
+    },
+    "Groundnut": {
+        "base": "Gypsum + phosphorus-focused basal nutrition",
+        "recommended": ["SSP", "Gypsum", "Rhizobium biofertilizer"],
+        "timing": ["Basal SSP at sowing", "Gypsum at flowering/pegging"],
+        "note": "Avoid excessive nitrogen because groundnut is a legume."
+    },
+    "Cotton": {
+        "base": "Balanced NPK with potash support",
+        "recommended": ["Urea", "DAP", "MOP", "Magnesium/sulphur if deficient"],
+        "timing": ["Basal at sowing", "Top-dress during vegetative growth", "Potash support before boll formation"],
+        "note": "Too much nitrogen can increase vegetative growth and pest pressure."
+    },
+    "Sugarcane": {
+        "base": "Heavy organic manure + higher N and K",
+        "recommended": ["Urea", "DAP", "MOP", "Press mud/FYM"],
+        "timing": ["Basal at planting", "Nitrogen splits in early growth", "Potash support later"],
+        "note": "Sugarcane is nutrient-hungry and benefits from regular split feeding."
+    },
+    "Maize": {
+        "base": "Balanced NPK with nitrogen splits",
+        "recommended": ["Urea", "DAP", "MOP", "Zinc if needed"],
+        "timing": ["Basal at sowing", "Top-dress at knee-high stage", "Final nitrogen before tasseling"],
+        "note": "Maize needs timely nitrogen more than large single doses."
+    },
+    "Coconut": {
+        "base": "Organic manure + NPK around basin",
+        "recommended": ["FYM/compost", "Urea", "Super phosphate", "MOP"],
+        "timing": ["Apply in 2 split doses before and after monsoon"],
+        "note": "Mulching and basin management improve nutrient uptake."
+    },
+}
+
+DEFAULT_FERTILIZER_GUIDE = {
+    "base": "Well-decomposed organic manure + balanced NPK",
+    "recommended": ["Urea", "DAP or SSP", "MOP/Potash"],
+    "timing": ["Basal dose before sowing/planting", "Top-dress nitrogen in splits during growth"],
+    "note": "The exact dose should be finalized through a soil test and local extension advice."
+}
+
+
+def get_fertilizer_recommendation(crop_name: str, soil_type: str = None, season: str = None, district: str = None) -> dict:
+    crop_title = (crop_name or "").strip().title()
+    guide = CROP_FERTILIZER_GUIDE.get(crop_title, DEFAULT_FERTILIZER_GUIDE)
+
+    soil_note_map = {
+        "red soil": "Red soil usually benefits from more organic matter and careful moisture management.",
+        "black soil": "Black soil retains nutrients well, so avoid over-application and ensure drainage.",
+        "alluvial soil": "Alluvial soil is fertile, but balanced nitrogen and potash still matter for sustained yield.",
+        "clay soil": "Clay soil can hold nutrients well but may need split applications to avoid waterlogging losses.",
+    }
+    season_note_map = {
+        "Kharif": "During Kharif, avoid applying all nitrogen before heavy rains. Prefer split doses.",
+        "Rabi": "During Rabi, irrigation scheduling strongly influences fertilizer efficiency.",
+        "Whole Year": "For whole-year crops, smaller repeated doses usually work better than one heavy application.",
+    }
+
+    return {
+        "crop": crop_title or "Crop",
+        "district": fuzzy_district(district) if district else None,
+        "soil_type": soil_type,
+        "season": season,
+        "base_recommendation": guide["base"],
+        "recommended_fertilizers": guide["recommended"],
+        "timing": guide["timing"],
+        "crop_note": guide["note"],
+        "soil_note": soil_note_map.get((soil_type or "").lower()),
+        "season_note": season_note_map.get(season),
+        "safety_note": "Use a local soil test and agricultural officer guidance for the exact dose per acre."
+    }
+
 
 
 def compute_suitability_score(

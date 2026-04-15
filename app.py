@@ -199,6 +199,7 @@ def soil():
             "district": district or None,
             "soil": soil_type.lower(),
             "season": None,
+            "month": None,
             "crop": None,
         }
 
@@ -208,6 +209,7 @@ def soil():
                 old = item["memory"]
                 latest_memory["district"] = latest_memory["district"] or old.get("district")
                 latest_memory["season"] = old.get("season")
+                latest_memory["month"] = old.get("month")
                 latest_memory["crop"] = old.get("crop")
 
         history = [item for item in history if item.get("role") != "system_memory"]

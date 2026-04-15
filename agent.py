@@ -8,6 +8,15 @@ from difflib import get_close_matches
 import data_engine as de
 import nlg
 
+MONTH_TO_SEASON = {
+    "january": "Rabi", "february": "Rabi", "march": "Rabi",
+    "april": "Whole Year", "may": "Whole Year",
+    "june": "Kharif", "july": "Kharif", "august": "Kharif", "september": "Kharif",
+    "october": "Rabi", "november": "Rabi", "december": "Rabi",
+}
+MONTH_ALIASES = {m[:3]: m for m in MONTH_TO_SEASON}
+
+
 # ── Entity keywords (used only for memory extraction, not query routing) ─────
 SOIL_KEYWORDS = {
     "alluvial soil": ["alluvial", "alluvium", "river soil"],
@@ -36,6 +45,16 @@ CROP_ALIASES = {
     "green gram": "moong", "black gram": "urad",
     "cholam": "sorghum", "cumbu": "bajra",
 }
+
+def _all_known_crops() -> list[str]:
+    dynamic = []
+    try:
+        if not de.hist_df.empty and "crop_name" in de.hist_df.columns:
+            dynamic = sorted({str(c).strip().lower() for c in de.hist_df["crop_name"].dropna().unique().tolist()})
+    except Exception:
+        dynamic = []
+    merged = sorted(set(dynamic + KNOWN_CROPS + list(CROP_ALIASES.keys())))
+    return merged
 
 GREETING_PATTERNS = [
     r"^(hi|hello|hey|howdy)[\s!.]*$",
@@ -100,11 +119,25 @@ def _extract_soil(query: str) -> str | None:
     return None
 
 
+def _extract_month(query: str) -> str | None:
+    ql = query.lower()
+    for month in MONTH_TO_SEASON:
+        if re.search(rf"\b{month}\b", ql):
+            return month.title()
+    for short, full in MONTH_ALIASES.items():
+        if re.search(rf"\b{short}\b", ql):
+            return full.title()
+    return None
+
+
 def _extract_season(query: str) -> str | None:
     ql = query.lower()
     for season, keywords in SEASON_KEYWORDS.items():
         if any(kw in ql for kw in keywords):
             return season
+    month = _extract_month(query)
+    if month:
+        return MONTH_TO_SEASON.get(month.lower())
     return None
 
 
@@ -125,7 +158,7 @@ def _extract_year(query: str) -> int | None:
 
 
 def _get_memory(history: list | None) -> dict:
-    memory = {"district": None, "soil": None, "season": None, "crop": None}
+    memory = {"district": None, "soil": None, "season": None, "month": None, "crop": None}
     if not history:
         return memory
     for item in history:
@@ -134,15 +167,17 @@ def _get_memory(history: list | None) -> dict:
             memory["district"] = saved.get("district") or memory["district"]
             memory["soil"]     = saved.get("soil")     or memory["soil"]
             memory["season"]   = saved.get("season")   or memory["season"]
+            memory["month"]    = saved.get("month")    or memory["month"]
             memory["crop"]     = saved.get("crop")     or memory["crop"]
     return memory
 
 
-def _merge_memory(memory: dict, district=None, soil=None, season=None, crop=None) -> dict:
+def _merge_memory(memory: dict, district=None, soil=None, season=None, month=None, crop=None) -> dict:
     updated = dict(memory or {})
     if district: updated["district"] = district
     if soil:     updated["soil"]     = soil
     if season:   updated["season"]   = season
+    if month:    updated["month"]    = month
     if crop:     updated["crop"]     = crop
     return updated
 
@@ -631,6 +666,10 @@ INTENT_PATTERNS = {
         r"fertilizer.*cost", r"labour.*cost", r"cultivation cost",
         r"how much.*farm", r"price.*grow", r"cost.*per acre",
     ],
+    "fertilizer_recommendation": [
+        r"fertilizer", r"manure", r"npk", r"urea", r"dap", r"potash",
+        r"what .*fertilizer", r"which .*fertilizer", r"fertiliser",
+    ],
     "whatif": [
         r"what if", r"if irrigation", r"if.*rain", r"if.*water",
         r"simulate", r"what would happen", r"suppose", r"assuming",
@@ -709,6 +748,7 @@ def _fallback_router(message: str, district: str, soil: str, season: str, crop: 
         district=_extract_district(message),
         soil=_extract_soil(message),
         season=_extract_season(message),
+        month=_extract_month(message),
         crop=_extract_crop(message),
     )
 
@@ -754,6 +794,12 @@ def _fallback_router(message: str, district: str, soil: str, season: str, crop: 
         profit_t   = "high" if re.search(r"high profit|maximum profit|profitable", message, re.I) else None
         mc_data = de.get_multi_criteria_crops(district, soil, season, water_need, profit_t)
         return {"text": nlg.describe_crops(district, mc_data), "intent": intent, "district": district, "memory": new_memory}
+
+    if intent == "fertilizer_recommendation":
+        if not crop:
+            return {"text": "Which crop do you want fertilizer advice for? For example: *Fertilizer for banana in Chennai*", "intent": intent, "district": district, "memory": new_memory}
+        fert = de.get_fertilizer_recommendation(crop, soil, season, district)
+        return {"text": nlg.describe_fertilizer(fert), "intent": intent, "district": district, "memory": new_memory}
 
     if intent == "rainfall_info":
         return {"text": nlg.describe_rainfall(district, de.get_rainfall_stats(district)), "intent": intent, "district": district, "memory": new_memory}
@@ -810,7 +856,7 @@ def _fallback_router(message: str, district: str, soil: str, season: str, crop: 
 # ════════════════════════════════════════════════════════════
 def process_query(message: str, history: list = None) -> dict:
     message = message.strip()
-    blank_mem = {"district": None, "soil": None, "season": None, "crop": None}
+    blank_mem = {"district": None, "soil": None, "season": None, "month": None, "crop": None}
     if not message:
         return {"text": WELCOME_TEXT, "intent": "greeting", "district": None, "memory": blank_mem}
 
@@ -820,22 +866,31 @@ def process_query(message: str, history: list = None) -> dict:
     quick_district = _extract_district(message)
     quick_soil     = _extract_soil(message)
     quick_season   = _extract_season(message)
+    quick_month    = _extract_month(message)
     quick_crop     = _extract_crop(message)
 
     district = quick_district or memory.get("district")
     soil     = quick_soil     or memory.get("soil")
-    season   = quick_season   or memory.get("season")
+    month    = quick_month    or memory.get("month")
+    season   = quick_season   or memory.get("season") or (MONTH_TO_SEASON.get(month.lower()) if month else None)
     crop     = quick_crop     or memory.get("crop")
 
     new_memory = _merge_memory(memory, district=quick_district, soil=quick_soil,
-                               season=quick_season, crop=quick_crop)
+                               season=quick_season or (MONTH_TO_SEASON.get(quick_month.lower()) if quick_month else None),
+                               month=quick_month, crop=quick_crop)
 
-    ctx = {"district": district, "soil": soil, "season": season, "crop": crop}
+    ctx = {"district": district, "soil": soil, "season": season, "month": month, "crop": crop}
 
     # Greeting shortcut (no Gemini call needed)
     ql = message.lower().strip()
     if any(re.search(p, ql) for p in GREETING_PATTERNS):
         return {"text": WELCOME_TEXT, "intent": "greeting", "district": district, "memory": new_memory}
+
+    # Helpful follow-up shortcut for fertilizer questions using remembered crop/location context
+    if re.search(r"fertili[sz]er|manure|\bnpk\b|\burea\b|\bdap\b|\bpotash\b", ql):
+        if crop:
+            fert = de.get_fertilizer_recommendation(crop, soil, season, district)
+            return {"text": nlg.describe_fertilizer(fert), "intent": "fertilizer_recommendation", "district": district, "memory": new_memory}
 
     # ── PRIMARY: Gemini AI understands and routes everything ─────────────
     agentic_text = _run_agentic_loop(message, history or [], ctx)
