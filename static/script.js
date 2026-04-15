@@ -7,6 +7,8 @@ const messagesList = document.getElementById('messagesList');
 const messagesWrap = document.getElementById('messagesWrap');
 const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
+const voiceInputBtn = document.getElementById('voiceInputBtn');
+const voiceStatus = document.getElementById('voiceStatus');
 const clearChatBtn = document.getElementById('clearChat');
 const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebar = document.querySelector('.sidebar');
@@ -47,6 +49,9 @@ let ttsEnabled = false;
 let currentUtterance = null;
 let speechQueue = [];
 let preferredVoice = null;
+let recognition = null;
+let isListening = false;
+let stopVoiceRequested = false;
 
 function prettyContextValue(value) {
   if (!value) return '—';
@@ -306,6 +311,104 @@ function updateTTSButton() {
 }
 function toggleGlobalTTS() { ttsEnabled = !ttsEnabled; updateTTSButton(); if (!ttsEnabled) stopSpeaking(); }
 
+function setVoiceStatus(message, isError = false) {
+  if (!voiceStatus) return;
+  voiceStatus.textContent = message || 'Tamil Nadu Smart Farming • Context-aware follow-up support';
+  voiceStatus.classList.toggle('voice-error', Boolean(isError));
+}
+
+function updateVoiceButton() {
+  if (!voiceInputBtn) return;
+  voiceInputBtn.classList.toggle('listening', isListening);
+  voiceInputBtn.textContent = isListening ? '■' : '🎙';
+  voiceInputBtn.title = isListening ? 'Stop listening' : 'Speak your question';
+}
+
+function initVoiceInput() {
+  if (!voiceInputBtn) return;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    voiceInputBtn.disabled = true;
+    voiceInputBtn.title = 'Voice input is not supported in this browser';
+    setVoiceStatus('Voice input is not supported in this browser.', true);
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = 'en-IN';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    isListening = true;
+    stopVoiceRequested = false;
+    stopSpeaking();
+    updateVoiceButton();
+    setVoiceStatus('Listening... speak your farming question.');
+  };
+
+  recognition.onresult = event => {
+    let finalText = '';
+    let interimText = '';
+    for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      const transcript = event.results[i][0].transcript.trim();
+      if (event.results[i].isFinal) finalText += transcript;
+      else interimText += transcript;
+    }
+    const spokenText = (finalText || interimText).trim();
+    if (spokenText) chatInput.value = spokenText;
+    chatInput.focus();
+    chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+    if (finalText.trim()) {
+      setVoiceStatus(`Heard: ${finalText.trim()}`);
+    }
+  };
+
+  recognition.onerror = event => {
+    const isPermissionError = event.error === 'not-allowed' || event.error === 'service-not-allowed';
+    const msg = isPermissionError
+      ? 'Microphone permission was blocked. Please allow microphone access.'
+      : 'Voice input stopped. Please try again.';
+    isListening = false;
+    stopVoiceRequested = true;
+    updateVoiceButton();
+    setVoiceStatus(msg, true);
+  };
+
+  recognition.onend = () => {
+    const text = chatInput.value.trim();
+    const shouldSend = isListening && !stopVoiceRequested && text;
+    isListening = false;
+    updateVoiceButton();
+    if (shouldSend) {
+      setVoiceStatus('Sending voice question...');
+      sendMessage(text);
+    } else if (!text && !stopVoiceRequested) {
+      setVoiceStatus('No speech detected. Tap the mic and try again.', true);
+    } else {
+      setVoiceStatus('Voice input stopped.');
+    }
+  };
+}
+
+function toggleVoiceInput() {
+  if (!recognition || isProcessing) return;
+  if (isListening) {
+    stopVoiceRequested = true;
+    recognition.stop();
+    return;
+  }
+  try {
+    stopVoiceRequested = false;
+    chatInput.value = '';
+    recognition.start();
+  } catch (_) {
+    updateVoiceButton();
+    setVoiceStatus('Voice input is already starting. Please wait a moment.', true);
+  }
+}
+
 function createWelcomeChips() {
   const wrap = document.createElement('div');
   wrap.className = 'welcome-chips';
@@ -489,6 +592,7 @@ function renderWelcome() { messagesList.innerHTML = ''; renderMessage(INTRO_MESS
 
 sendBtn.addEventListener('click', () => sendMessage(chatInput.value.trim()));
 chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(chatInput.value.trim()); } });
+if (voiceInputBtn) voiceInputBtn.addEventListener('click', toggleVoiceInput);
 clearChatBtn.addEventListener('click', clearChat);
 sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
 if (ttsBtnGlobal) ttsBtnGlobal.addEventListener('click', toggleGlobalTTS);
@@ -509,6 +613,7 @@ if (window.speechSynthesis) {
   loadPreferredVoice();
   speechSynthesis.onvoiceschanged = loadPreferredVoice;
 }
+initVoiceInput();
 
 document.addEventListener('click', e => {
   if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {

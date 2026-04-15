@@ -979,7 +979,22 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 14px;
+    padding: 10px;
+    margin: 10px 12px 6px;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025)),
+        rgba(7,17,13,0.72);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    transition: var(--transition);
+}
+
+.input-row:focus-within {
+    border-color: var(--border-strong);
+    box-shadow:
+        0 0 0 4px rgba(39,194,107,0.08),
+        inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
 .upload-btn {
@@ -1011,19 +1026,20 @@ body {
     color: var(--text-1);
     font-family: var(--font-ui);
     font-size: 0.95rem;
-    padding: 6px 4px;
+    padding: 8px 4px 8px 8px;
     min-height: 38px;
+    letter-spacing: 0;
 }
 
 #chatInput::placeholder {
     color: var(--text-3);
 }
 
+.voice-btn,
 .send-btn {
     width: 44px;
     height: 44px;
     border-radius: 12px;
-    background: linear-gradient(135deg, var(--accent), #179355);
     border: none;
     color: #fff;
     display: flex;
@@ -1032,12 +1048,41 @@ body {
     cursor: pointer;
     flex-shrink: 0;
     transition: var(--transition);
+}
+
+.voice-btn {
+    background: rgba(255,255,255,0.055);
+    border: 1px solid var(--border);
+    color: var(--accent-2);
+    box-shadow: none;
+}
+
+.send-btn {
+    background: linear-gradient(135deg, var(--accent), #179355);
     box-shadow: 0 10px 20px rgba(39, 194, 107, 0.2);
 }
 
+.voice-btn:hover,
 .send-btn:hover {
     transform: translateY(-1px);
     box-shadow: 0 14px 24px rgba(39, 194, 107, 0.26);
+}
+
+.voice-btn:hover {
+    background: rgba(39,194,107,0.12);
+    border-color: var(--border-strong);
+}
+
+.voice-btn.listening {
+    background: rgba(39,194,107,0.18);
+    border-color: rgba(39,194,107,0.46);
+    color: #d8ffe4;
+    animation: voicePulse 1s ease-in-out infinite;
+}
+
+.voice-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 .send-btn:disabled {
@@ -1045,11 +1090,20 @@ body {
     cursor: not-allowed;
 }
 
+@keyframes voicePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(39,194,107,0.18); }
+    50% { box-shadow: 0 0 0 7px rgba(39,194,107,0.06); }
+}
+
 .input-footer {
-    padding: 0 14px 10px;
+    padding: 0 16px 10px;
     font-size: 0.72rem;
     color: var(--text-3);
     text-align: center;
+}
+
+.input-footer .voice-error {
+    color: var(--warning);
 }
 
 @media (max-width: 900px) {
