@@ -9,6 +9,7 @@ const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
 const voiceInputBtn = document.getElementById('voiceInputBtn');
 const voiceStatus = document.getElementById('voiceStatus');
+const languageToggle = document.getElementById('languageToggle');
 const clearChatBtn = document.getElementById('clearChat');
 const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebar = document.querySelector('.sidebar');
@@ -36,7 +37,11 @@ const manualSeason = document.getElementById('manualSeason');
 const applyContextBtn = document.getElementById('applyContextBtn');
 const resetContextBtn = document.getElementById('resetContextBtn');
 
+let APP_LANGUAGE = localStorage.getItem('sf_language') || 'en';
+if (!['en', 'ta'].includes(APP_LANGUAGE)) APP_LANGUAGE = APP_LANGUAGE.startsWith('ta') ? 'ta' : 'en';
+
 const INTRO_MESSAGE = `🤖 I'm your Smart Farming AI for Tamil Nadu, and I'm here to help with agriculture questions.\n\nTry one of these examples:`;
+const INTRO_MESSAGE_TA = `🤖 நான் தமிழ்நாட்டிற்கான Smart Farming AI. வேளாண்மை கேள்விகளுக்கு உதவ தயாராக இருக்கிறேன்.\n\nஇந்த மாதிரி கேள்விகளை முயற்சி செய்யலாம்:`;
 
 const WELCOME_QUERIES = [
   'Best crops for Madurai with red soil during Kharif?',
@@ -45,13 +50,29 @@ const WELCOME_QUERIES = [
   'Overview of Erode district?'
 ];
 
+const WELCOME_QUERIES_TA = [
+  'மதுரையில் சிவப்பு மண்ணில் காரிஃப் பருவத்திற்கு சிறந்த பயிர்கள்?',
+  'கோயம்புத்தூர் மழை அளவு என்ன?',
+  'தர்மபுரியில் பூச்சி அபாயம் என்ன?',
+  'ஈரோடு மாவட்ட விவரம் சொல்லுங்கள்'
+];
+
 let ttsEnabled = false;
 let currentUtterance = null;
 let speechQueue = [];
 let preferredVoice = null;
+let currentSpeechLang = 'en-IN';
+let speechWatchdog = null;
+let speechKeepAlive = null;
+let speechRunId = 0;
 let recognition = null;
 let isListening = false;
 let stopVoiceRequested = false;
+let voiceTranscript = '';
+let voiceAutoStopTimer = null;
+let recognitionLangInUse = null;
+let recognitionFallbackTimer = null;
+let recognitionStartTimer = null;
 
 function prettyContextValue(value) {
   if (!value) return '—';
@@ -152,7 +173,7 @@ async function applyManualContext() {
   }
   updateContextUI(nextContext);
   await persistManualContext(nextContext);
-  renderMessage(`✅ Manual context updated.`, 'bot');
+  renderMessage((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).manualUpdated, 'bot');
 }
 
 async function resetManualContext() {
@@ -242,9 +263,41 @@ function cleanSpeechText(text) {
     .trim();
 }
 
-function loadPreferredVoice() {
+function hasTamilText(text) {
+  return /[\u0B80-\u0BFF]/.test(text || '');
+}
+
+function getAvailableVoices() {
+  return window.speechSynthesis ? speechSynthesis.getVoices() : [];
+}
+
+function findTamilVoice(voices = getAvailableVoices()) {
+  return voices.find(v => /ta-IN/i.test(v.lang)) ||
+    voices.find(v => /^ta/i.test(v.lang)) ||
+    voices.find(v => /Tamil/i.test(v.name)) ||
+    null;
+}
+
+function waitForVoices(timeoutMs = 1800) {
+  if (!window.speechSynthesis) return Promise.resolve([]);
+  const existing = speechSynthesis.getVoices();
+  if (existing.length) return Promise.resolve(existing);
+  return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(speechSynthesis.getVoices()), timeoutMs);
+    speechSynthesis.onvoiceschanged = () => {
+      clearTimeout(timer);
+      resolve(speechSynthesis.getVoices());
+    };
+  });
+}
+
+function loadPreferredVoice(lang = 'en-IN') {
   if (!window.speechSynthesis) return null;
-  const voices = speechSynthesis.getVoices();
+  const voices = getAvailableVoices();
+  if (/ta-IN/i.test(lang)) {
+    preferredVoice = findTamilVoice(voices);
+    return preferredVoice;
+  }
   preferredVoice =
     voices.find(v => /en-IN/i.test(v.lang)) ||
     voices.find(v => /India/i.test(v.name)) ||
@@ -254,15 +307,26 @@ function loadPreferredVoice() {
   return preferredVoice;
 }
 
-function splitSpeechText(text, maxLen = 220) {
-  const sentences = text.match(/[^.!?]+[.!?]*/g) || [text];
+function splitSpeechText(text, maxLen = 180) {
+  const sentences = text.match(/[^.!?।]+[.!?।]*/g) || [text];
   const chunks = [];
   let current = '';
   sentences.forEach(sentence => {
-    const next = `${current} ${sentence}`.trim();
+    const trimmed = sentence.trim();
+    if (trimmed.length > maxLen) {
+      if (current) {
+        chunks.push(current);
+        current = '';
+      }
+      for (let i = 0; i < trimmed.length; i += maxLen) {
+        chunks.push(trimmed.slice(i, i + maxLen));
+      }
+      return;
+    }
+    const next = `${current} ${trimmed}`.trim();
     if (next.length > maxLen && current) {
       chunks.push(current);
-      current = sentence.trim();
+      current = trimmed;
     } else {
       current = next;
     }
@@ -272,147 +336,537 @@ function splitSpeechText(text, maxLen = 220) {
 }
 
 function speakNextChunk() {
+  clearTimeout(speechWatchdog);
+  clearInterval(speechKeepAlive);
   if (!window.speechSynthesis || !speechQueue.length) {
     currentUtterance = null;
     return;
   }
+  const runId = speechRunId;
   const chunk = speechQueue.shift();
   currentUtterance = new SpeechSynthesisUtterance(chunk);
-  currentUtterance.lang = preferredVoice?.lang || 'en-IN';
-  currentUtterance.voice = preferredVoice || loadPreferredVoice();
-  currentUtterance.rate = 0.94;
-  currentUtterance.pitch = 1.02;
+  currentUtterance.lang = currentSpeechLang;
+  currentUtterance.voice = preferredVoice || null;
+  currentUtterance.rate = currentSpeechLang === 'ta-IN' ? 0.86 : 0.94;
+  currentUtterance.pitch = currentSpeechLang === 'ta-IN' ? 1.0 : 1.02;
   currentUtterance.volume = 1;
-  currentUtterance.onend = speakNextChunk;
-  currentUtterance.onerror = () => { currentUtterance = null; speechQueue = []; };
+  currentUtterance.onend = () => {
+    if (runId !== speechRunId) return;
+    clearInterval(speechKeepAlive);
+    currentUtterance = null;
+    speakNextChunk();
+  };
+  currentUtterance.onerror = () => {
+    if (runId !== speechRunId) return;
+    clearTimeout(speechWatchdog);
+    clearInterval(speechKeepAlive);
+    currentUtterance = null;
+    speakNextChunk();
+  };
   speechSynthesis.speak(currentUtterance);
+  speechKeepAlive = setInterval(() => {
+    if (runId !== speechRunId || !currentUtterance) {
+      clearInterval(speechKeepAlive);
+      return;
+    }
+    if (speechSynthesis.paused) speechSynthesis.resume();
+  }, 6000);
 }
 
 function getTime() { return new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); }
-function speakText(text) {
+async function speakText(text) {
   if (!window.speechSynthesis) return;
   const cleaned = cleanSpeechText(text);
   if (!cleaned) return;
   stopSpeaking();
-  loadPreferredVoice();
+  speechRunId += 1;
+  currentSpeechLang = APP_LANGUAGE === 'ta' ? 'ta-IN' : (hasTamilText(cleaned) ? 'ta-IN' : 'en-IN');
+  await waitForVoices();
+  loadPreferredVoice(currentSpeechLang);
+  if (currentSpeechLang === 'ta-IN' && !preferredVoice) {
+    setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).tamilVoiceMissing, true);
+    return;
+  }
   speechQueue = splitSpeechText(cleaned);
   speakNextChunk();
 }
 function stopSpeaking() {
+  speechRunId += 1;
   speechQueue = [];
+  clearTimeout(speechWatchdog);
+  clearInterval(speechKeepAlive);
   if (window.speechSynthesis) speechSynthesis.cancel();
   currentUtterance = null;
 }
 function updateTTSButton() {
   if (!ttsBtnGlobal) return;
+  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
   ttsBtnGlobal.classList.toggle('tts-active', ttsEnabled);
-  ttsBtnGlobal.title = ttsEnabled ? 'Disable auto voice replies' : 'Enable auto voice replies';
+  ttsBtnGlobal.title = ttsEnabled ? t.disableTTS : t.enableTTS;
   ttsBtnGlobal.querySelector('.tts-icon').textContent = ttsEnabled ? '🔊' : '🔇';
 }
 function toggleGlobalTTS() { ttsEnabled = !ttsEnabled; updateTTSButton(); if (!ttsEnabled) stopSpeaking(); }
 
+function languageCode() {
+  return APP_LANGUAGE === 'ta' ? 'ta-IN' : 'en-IN';
+}
+
+const UI_TEXT = {
+  en: {
+    documentTitle: 'Smart Farming AI - Tamil Nadu Agricultural Assistant',
+    logoTitle: 'SmartFarm AI',
+    logoSub: 'Tamil Nadu Agricultural Intelligence',
+    topbarTitle: 'Smart Farming AI',
+    topbarSub: 'Professional agricultural assistant for Tamil Nadu farming insights',
+    soilLabel: 'Soil Identification',
+    soilHelp: 'Upload a soil photo to identify soil type and use it in follow-up queries.',
+    uploadSoil: '📎 Upload Soil Image',
+    manualLabel: 'Manual Context',
+    cropLabel: 'Crop',
+    locationLabel: 'Location',
+    soilFieldLabel: 'Soil',
+    monthLabel: 'Month',
+    seasonLabel: 'Season',
+    applyContext: 'Apply Context',
+    resetContext: 'Reset',
+    activeLabel: 'Active Context',
+    contextHelp: 'Current stored values used for follow-up questions.',
+    whatifLabel: 'What-If Simulator',
+    scenarioTitle: '🔬 Scenario Simulator',
+    irrigationChange: '💧 Irrigation Change',
+    rainfallChange: '🌧️ Rainfall Change',
+    simulate: '▶ Run Simulation',
+    simulateFor: district => `▶ Simulate for ${district}`,
+    selectSoil: 'Select soil',
+    alluvialSoil: 'Alluvial soil',
+    blackSoil: 'Black soil',
+    claySoil: 'Clay soil',
+    redSoil: 'Red soil',
+    selectMonth: 'Select month',
+    selectSeason: 'Select season',
+    winter: 'Winter',
+    summer: 'Summer',
+    kharifRainy: 'Kharif / Rainy',
+    rabi: 'Rabi',
+    autumn: 'Autumn',
+    wholeYear: 'Whole Year / Perennial',
+    months: ['January', 'February', 'December', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November'],
+    enableTTS: 'Enable auto voice replies',
+    disableTTS: 'Disable auto voice replies',
+    clearTitle: 'Clear conversation',
+    micTitle: 'Speak your question',
+    micStopTitle: 'Stop listening',
+    sendTitle: 'Send message',
+    sidebarTitle: 'Toggle sidebar',
+    removeImageTitle: 'Remove image',
+    listening: 'Listening... speak your farming question.',
+    voiceUnsupported: 'Voice input is not supported in this browser.',
+    heard: text => `Heard: ${text}`,
+    micPermission: 'Microphone permission was blocked. Please allow microphone access.',
+    voiceTryAgain: 'Voice input stopped. Please try again.',
+    voiceStarting: 'Starting microphone...',
+    voiceSending: 'Sending voice question...',
+    noSpeech: 'No speech detected. Tap the mic and try again.',
+    voiceStopped: 'Voice input stopped.',
+    tamilVoiceMissing: 'Tamil voice is not available in this browser/OS. Please install or enable a Tamil voice; English fallback is blocked.',
+    manualUpdated: '✅ Manual context updated.',
+    noDistrictSimulation: '⚠️ Please set a district in Manual Context or ask a district-specific question first, then run the simulation again.',
+    inputFooter: 'Tamil Nadu Smart Farming • Context-aware follow-up support',
+    cropPlaceholder: 'e.g. Rice',
+    districtPlaceholder: 'e.g. Madurai',
+    chatPlaceholder: 'Ask about crops, rainfall, fertilizer, irrigation, pest risks...',
+  },
+  ta: {
+    documentTitle: 'ஸ்மார்ட் வேளாண்மை AI - தமிழ்நாடு வேளாண்மை உதவியாளர்',
+    logoTitle: 'SmartFarm AI',
+    logoSub: 'தமிழ்நாடு வேளாண்மை நுண்ணறிவு',
+    topbarTitle: 'ஸ்மார்ட் வேளாண்மை AI',
+    topbarSub: 'தமிழ்நாடு வேளாண்மை தகவல்களுக்கான உதவியாளர்',
+    soilLabel: 'மண் அடையாளம்',
+    soilHelp: 'மண் வகையை அறிய புகைப்படத்தை பதிவேற்றவும்.',
+    uploadSoil: '📎 மண் படத்தை பதிவேற்று',
+    manualLabel: 'கையேடு சூழல்',
+    cropLabel: 'பயிர்',
+    locationLabel: 'மாவட்டம்',
+    soilFieldLabel: 'மண்',
+    monthLabel: 'மாதம்',
+    seasonLabel: 'பருவம்',
+    applyContext: 'சூழலை பயன்படுத்து',
+    resetContext: 'மீட்டமை',
+    activeLabel: 'செயலில் உள்ள சூழல்',
+    contextHelp: 'அடுத்த கேள்விகளுக்கு பயன்படுத்தப்படும் தற்போதைய மதிப்புகள்.',
+    whatifLabel: 'என்ன ஆகும்? சோதனை',
+    scenarioTitle: '🔬 சூழ்நிலை சோதனை',
+    irrigationChange: '💧 பாசன மாற்றம்',
+    rainfallChange: '🌧️ மழை மாற்றம்',
+    simulate: '▶ சோதனை இயக்கு',
+    simulateFor: district => `▶ ${district} க்கு சோதனை`,
+    selectSoil: 'மண் தேர்வு',
+    alluvialSoil: 'வண்டல் மண்',
+    blackSoil: 'கரிசல் மண்',
+    claySoil: 'களிமண்',
+    redSoil: 'சிவப்பு மண்',
+    selectMonth: 'மாதம் தேர்வு',
+    selectSeason: 'பருவம் தேர்வு',
+    winter: 'குளிர்காலம்',
+    summer: 'கோடைகாலம்',
+    kharifRainy: 'காரிஃப் / மழைக்காலம்',
+    rabi: 'ரபி',
+    autumn: 'இலையுதிர் காலம்',
+    wholeYear: 'முழு ஆண்டு / நிரந்தர பயிர்',
+    months: ['ஜனவரி', 'பிப்ரவரி', 'டிசம்பர்', 'மார்ச்', 'ஏப்ரல்', 'மே', 'ஜூன்', 'ஜூலை', 'ஆகஸ்ட்', 'செப்டம்பர்', 'அக்டோபர்', 'நவம்பர்'],
+    enableTTS: 'குரல் பதில்களை இயக்கு',
+    disableTTS: 'குரல் பதில்களை நிறுத்து',
+    clearTitle: 'உரையாடலை அழி',
+    micTitle: 'உங்கள் கேள்வியை பேசுங்கள்',
+    micStopTitle: 'கேட்பதை நிறுத்து',
+    sendTitle: 'செய்தி அனுப்பு',
+    sidebarTitle: 'பக்கப்பட்டியை திற/மூடு',
+    removeImageTitle: 'படத்தை அகற்று',
+    listening: 'கேட்கிறது... உங்கள் வேளாண்மை கேள்வியை பேசுங்கள்.',
+    voiceUnsupported: 'இந்த உலாவியில் குரல் உள்ளீடு ஆதரிக்கப்படவில்லை.',
+    heard: text => `கேட்டது: ${text}`,
+    micPermission: 'மைக்ரோஃபோன் அனுமதி தடுக்கப்பட்டுள்ளது. மைக்ரோஃபோன் அணுகலை அனுமதிக்கவும்.',
+    voiceTryAgain: 'குரல் உள்ளீடு நிறுத்தப்பட்டது. மீண்டும் முயற்சிக்கவும்.',
+    voiceStarting: 'குரல் உள்ளீடு தொடங்குகிறது. சிறிது காத்திருக்கவும்.',
+    voiceSending: 'குரல் கேள்வி அனுப்பப்படுகிறது...',
+    noSpeech: 'பேச்சு கண்டறியப்படவில்லை. மைக் அழுத்தி மீண்டும் முயற்சிக்கவும்.',
+    voiceStopped: 'குரல் உள்ளீடு நிறுத்தப்பட்டது.',
+    tamilVoiceMissing: 'இந்த உலாவி/சாதனத்தில் தமிழ் குரல் இல்லை. தமிழ் voice ஐ நிறுவவும் அல்லது இயக்கு; English fallback தடுக்கப்பட்டுள்ளது.',
+    manualUpdated: '✅ கையேடு சூழல் புதுப்பிக்கப்பட்டது.',
+    noDistrictSimulation: '⚠️ முதலில் கையேடு சூழலில் மாவட்டத்தை அமைக்கவும் அல்லது மாவட்டம் சார்ந்த கேள்வி கேட்கவும். பிறகு சோதனையை மீண்டும் இயக்கவும்.',
+    inputFooter: 'தமிழ்நாடு ஸ்மார்ட் வேளாண்மை • சூழல் சார்ந்த உதவி',
+    cropPlaceholder: 'உ.தா. நெல்',
+    districtPlaceholder: 'உ.தா. மதுரை',
+    chatPlaceholder: 'பயிர், மழை, உரம், பாசனம், பூச்சி அபாயம் பற்றி கேளுங்கள்...',
+  }
+};
+
+function setText(selector, value) {
+  const el = document.querySelector(selector);
+  if (el) el.textContent = value;
+}
+
+function setPlaceholder(selector, value) {
+  const el = document.querySelector(selector);
+  if (el) el.placeholder = value;
+}
+
+function setTitle(selector, value) {
+  const el = document.querySelector(selector);
+  if (el) el.title = value;
+}
+
+function setSelectText(select, updates) {
+  if (!select) return;
+  updates.forEach(({ value, text }, index) => {
+    const option = value === undefined ? select.options[index] : Array.from(select.options).find(opt => opt.value === value);
+    if (option) textContentPreservingValue(option, text, value);
+  });
+}
+
+function textContentPreservingValue(option, text, value) {
+  if (value !== undefined) option.value = value;
+  option.textContent = text;
+}
+
+function applyPageLanguage() {
+  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+  document.documentElement.lang = APP_LANGUAGE === 'ta' ? 'ta' : 'en';
+  document.title = t.documentTitle;
+  setText('.logo-title', t.logoTitle);
+  setText('.logo-sub', t.logoSub);
+  setText('.topbar-title', t.topbarTitle);
+  setText('.topbar-sub', t.topbarSub);
+  const sidebarLabels = document.querySelectorAll('.sidebar-label');
+  if (sidebarLabels[0]) sidebarLabels[0].textContent = t.soilLabel;
+  if (sidebarLabels[1]) sidebarLabels[1].textContent = t.manualLabel;
+  if (sidebarLabels[2]) sidebarLabels[2].textContent = t.activeLabel;
+  if (sidebarLabels[3]) sidebarLabels[3].textContent = t.whatifLabel;
+  setText('.tool-help', t.soilHelp);
+  setText('.sidebar-upload-btn span', t.uploadSoil);
+  const labels = document.querySelectorAll('.manual-field label');
+  if (labels[0]) labels[0].textContent = t.cropLabel;
+  if (labels[1]) labels[1].textContent = t.locationLabel;
+  if (labels[2]) labels[2].textContent = t.soilFieldLabel;
+  if (labels[3]) labels[3].textContent = t.monthLabel;
+  if (labels[4]) labels[4].textContent = t.seasonLabel;
+  setText('#applyContextBtn', t.applyContext);
+  setText('#resetContextBtn', t.resetContext);
+  setText('.context-help', t.contextHelp);
+  const contextKeys = document.querySelectorAll('.context-key');
+  if (contextKeys[0]) contextKeys[0].textContent = t.cropLabel;
+  if (contextKeys[1]) contextKeys[1].textContent = t.locationLabel;
+  if (contextKeys[2]) contextKeys[2].textContent = t.soilFieldLabel;
+  if (contextKeys[3]) contextKeys[3].textContent = t.monthLabel;
+  if (contextKeys[4]) contextKeys[4].textContent = t.seasonLabel;
+  setText('.whatif-panel h4', t.scenarioTitle);
+  const whatifSpans = document.querySelectorAll('.whatif-label span');
+  if (whatifSpans[0]) whatifSpans[0].textContent = t.irrigationChange;
+  if (whatifSpans[1]) whatifSpans[1].textContent = t.rainfallChange;
+  if (manualSoil) {
+    setSelectText(manualSoil, [
+      { value: '', text: t.selectSoil },
+      { value: 'alluvial soil', text: t.alluvialSoil },
+      { value: 'black soil', text: t.blackSoil },
+      { value: 'clay soil', text: t.claySoil },
+      { value: 'red soil', text: t.redSoil },
+    ]);
+  }
+  if (manualMonth) {
+    const monthValues = ['January', 'February', 'December', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November'];
+    if (manualMonth.options[0]) textContentPreservingValue(manualMonth.options[0], t.selectMonth, '');
+    monthValues.forEach((month, index) => {
+      const option = Array.from(manualMonth.options).find(opt => opt.value === month || opt.textContent === month || opt.textContent === (UI_TEXT.ta.months[index]));
+      if (option) textContentPreservingValue(option, t.months[index], month);
+    });
+    const monthGroups = manualMonth.querySelectorAll('optgroup');
+    if (monthGroups[0]) monthGroups[0].label = t.winter;
+    if (monthGroups[1]) monthGroups[1].label = t.summer;
+    if (monthGroups[2]) monthGroups[2].label = t.kharifRainy;
+    if (monthGroups[3]) monthGroups[3].label = t.rabi;
+  }
+  if (manualSeason) {
+    setSelectText(manualSeason, [
+      { value: '', text: t.selectSeason },
+      { value: 'Winter', text: t.winter },
+      { value: 'Summer', text: t.summer },
+      { value: 'Kharif', text: t.kharifRainy },
+      { value: 'Rabi', text: t.rabi },
+      { value: 'Autumn', text: t.autumn },
+      { value: 'Whole Year', text: t.wholeYear },
+    ]);
+  }
+  if (simulateBtn) simulateBtn.textContent = activeContext.district ? t.simulateFor(activeContext.district) : t.simulate;
+  setTitle('#clearChat', t.clearTitle);
+  setTitle('#voiceInputBtn', isListening ? t.micStopTitle : t.micTitle);
+  setTitle('#sendBtn', t.sendTitle);
+  setTitle('#sidebarToggle', t.sidebarTitle);
+  setTitle('#removeImgBtn', t.removeImageTitle);
+  setPlaceholder('#manualCrop', t.cropPlaceholder);
+  setPlaceholder('#manualDistrict', t.districtPlaceholder);
+  setPlaceholder('#chatInput', t.chatPlaceholder);
+  setVoiceStatus(t.inputFooter);
+  updateTTSButton();
+}
+
+function updateLanguageUI() {
+  if (!languageToggle) return;
+  languageToggle.classList.toggle('tamil-mode', APP_LANGUAGE === 'ta');
+  languageToggle.title = APP_LANGUAGE === 'ta' ? 'தமிழில் உள்ளது. English க்கு மாற்ற' : 'English mode. Switch to Tamil';
+  applyPageLanguage();
+  if (recognition) recognition.lang = languageCode();
+}
+
+function toggleLanguage() {
+  APP_LANGUAGE = APP_LANGUAGE === 'ta' ? 'en' : 'ta';
+  localStorage.setItem('sf_language', APP_LANGUAGE);
+  stopSpeaking();
+  updateLanguageUI();
+  renderWelcome();
+}
+
 function setVoiceStatus(message, isError = false) {
   if (!voiceStatus) return;
-  voiceStatus.textContent = message || 'Tamil Nadu Smart Farming • Context-aware follow-up support';
+  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+  voiceStatus.textContent = message || t.inputFooter;
   voiceStatus.classList.toggle('voice-error', Boolean(isError));
 }
 
 function updateVoiceButton() {
   if (!voiceInputBtn) return;
+  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
   voiceInputBtn.classList.toggle('listening', isListening);
   voiceInputBtn.textContent = isListening ? '■' : '🎙';
-  voiceInputBtn.title = isListening ? 'Stop listening' : 'Speak your question';
+  voiceInputBtn.title = isListening ? t.micStopTitle : t.micTitle;
 }
 
-function initVoiceInput() {
+function createSpeechRecognition(langOverride = null) {
   if (!voiceInputBtn) return;
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
+    const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
     voiceInputBtn.disabled = true;
-    voiceInputBtn.title = 'Voice input is not supported in this browser';
-    setVoiceStatus('Voice input is not supported in this browser.', true);
-    return;
+    voiceInputBtn.title = t.voiceUnsupported;
+    setVoiceStatus(t.voiceUnsupported, true);
+    return null;
   }
 
-  recognition = new SpeechRecognition();
-  recognition.lang = 'en-IN';
-  recognition.interimResults = true;
-  recognition.continuous = false;
-  recognition.maxAlternatives = 1;
+  const recognizer = new SpeechRecognition();
+  recognizer.lang = langOverride || languageCode();
+  recognitionLangInUse = recognizer.lang;
+  recognizer.interimResults = true;
+  recognizer.continuous = false;
+  recognizer.maxAlternatives = 1;
 
-  recognition.onstart = () => {
+  recognizer.onstart = () => {
+    const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+    clearTimeout(recognitionStartTimer);
     isListening = true;
     stopVoiceRequested = false;
+    voiceTranscript = '';
+    clearTimeout(recognitionFallbackTimer);
+    if (APP_LANGUAGE === 'ta' && recognitionLangInUse === 'ta-IN') {
+      recognitionFallbackTimer = setTimeout(() => {
+        if (isListening && !voiceTranscript && !chatInput.value.trim()) {
+          try {
+            stopVoiceRequested = true;
+            recognition.stop();
+          } catch (_) {}
+          setTimeout(() => {
+            try {
+              stopVoiceRequested = false;
+              startRecognition('en-IN');
+              setVoiceStatus('தமிழ் குரல் உள்ளீடு கிடைக்கவில்லை. English recognition மூலம் மீண்டும் கேட்கிறது...');
+            } catch (_) {
+              setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).voiceTryAgain, true);
+            }
+          }, 250);
+        }
+      }, 3500);
+    }
     stopSpeaking();
     updateVoiceButton();
-    setVoiceStatus('Listening... speak your farming question.');
+    setVoiceStatus(t.listening);
   };
 
-  recognition.onresult = event => {
-    let finalText = '';
+  recognizer.onresult = event => {
+    clearTimeout(voiceAutoStopTimer);
+    clearTimeout(recognitionFallbackTimer);
+    let finalText = voiceTranscript;
     let interimText = '';
     for (let i = event.resultIndex; i < event.results.length; i += 1) {
       const transcript = event.results[i][0].transcript.trim();
-      if (event.results[i].isFinal) finalText += transcript;
-      else interimText += transcript;
+      if (event.results[i].isFinal) finalText = `${finalText} ${transcript}`.trim();
+      else interimText = `${interimText} ${transcript}`.trim();
     }
+    voiceTranscript = finalText;
     const spokenText = (finalText || interimText).trim();
     if (spokenText) chatInput.value = spokenText;
     chatInput.focus();
     chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
-    if (finalText.trim()) {
-      setVoiceStatus(`Heard: ${finalText.trim()}`);
+    if (spokenText) {
+      setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).heard(spokenText));
     }
   };
 
-  recognition.onerror = event => {
+  recognizer.onspeechend = () => {
+    clearTimeout(voiceAutoStopTimer);
+    voiceAutoStopTimer = setTimeout(() => {
+      if (recognition && isListening) {
+        try { recognition.stop(); } catch (_) {}
+      }
+    }, 900);
+  };
+
+  recognizer.onerror = event => {
+    clearTimeout(voiceAutoStopTimer);
+    clearTimeout(recognitionFallbackTimer);
+    const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+    clearTimeout(recognitionStartTimer);
     const isPermissionError = event.error === 'not-allowed' || event.error === 'service-not-allowed';
-    const msg = isPermissionError
-      ? 'Microphone permission was blocked. Please allow microphone access.'
-      : 'Voice input stopped. Please try again.';
+    const canRetryInEnglish = APP_LANGUAGE === 'ta' && recognitionLangInUse === 'ta-IN' && !voiceTranscript && !isPermissionError;
+    if (canRetryInEnglish) {
+      try {
+        recognition = createSpeechRecognition('en-IN');
+        recognition.start();
+        setVoiceStatus('தமிழ் குரல் உள்ளீடு கிடைக்கவில்லை. English recognition மூலம் மீண்டும் கேட்கிறது...');
+        return;
+      } catch (_) {}
+    }
+    const msg = isPermissionError ? t.micPermission : t.voiceTryAgain;
     isListening = false;
     stopVoiceRequested = true;
     updateVoiceButton();
     setVoiceStatus(msg, true);
   };
 
-  recognition.onend = () => {
-    const text = chatInput.value.trim();
+  recognizer.onend = () => {
+    clearTimeout(voiceAutoStopTimer);
+    clearTimeout(recognitionFallbackTimer);
+    clearTimeout(recognitionStartTimer);
+    const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+    const text = (voiceTranscript || chatInput.value).trim();
     const shouldSend = isListening && !stopVoiceRequested && text;
     isListening = false;
     updateVoiceButton();
     if (shouldSend) {
-      setVoiceStatus('Sending voice question...');
+      setVoiceStatus(t.voiceSending);
       sendMessage(text);
     } else if (!text && !stopVoiceRequested) {
-      setVoiceStatus('No speech detected. Tap the mic and try again.', true);
+      setVoiceStatus(t.noSpeech, true);
     } else {
-      setVoiceStatus('Voice input stopped.');
+      setVoiceStatus(t.voiceStopped);
     }
   };
+
+  return recognizer;
 }
 
-function toggleVoiceInput() {
+function initVoiceInput() {
+  recognition = createSpeechRecognition();
+}
+
+function startRecognition(langOverride = null) {
+  recognition = createSpeechRecognition(langOverride);
+  if (!recognition) return;
+  recognition.lang = langOverride || languageCode();
+  recognitionLangInUse = recognition.lang;
+  recognition.start();
+  clearTimeout(recognitionStartTimer);
+  recognitionStartTimer = setTimeout(() => {
+    if (!isListening) {
+      try { recognition.abort(); } catch (_) {}
+      recognition = createSpeechRecognition();
+      updateVoiceButton();
+      setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).voiceTryAgain, true);
+    }
+  }, 2500);
+}
+
+async function toggleVoiceInput() {
   if (!recognition || isProcessing) return;
   if (isListening) {
     stopVoiceRequested = true;
+    clearTimeout(voiceAutoStopTimer);
+    clearTimeout(recognitionFallbackTimer);
+    clearTimeout(recognitionStartTimer);
     recognition.stop();
     return;
   }
   try {
+    const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+    setVoiceStatus(t.voiceStarting);
     stopVoiceRequested = false;
+    voiceTranscript = '';
+    clearTimeout(voiceAutoStopTimer);
+    clearTimeout(recognitionFallbackTimer);
+    clearTimeout(recognitionStartTimer);
     chatInput.value = '';
-    recognition.start();
-  } catch (_) {
+    startRecognition();
+  } catch (err) {
+    if (err && err.name === 'InvalidStateError' && recognition) {
+      try { recognition.stop(); } catch (_) {}
+      setTimeout(() => {
+        try {
+          stopVoiceRequested = false;
+          startRecognition(APP_LANGUAGE === 'ta' ? 'en-IN' : null);
+        } catch (_) {
+          setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).voiceTryAgain, true);
+        }
+      }, 250);
+      return;
+    }
     updateVoiceButton();
-    setVoiceStatus('Voice input is already starting. Please wait a moment.', true);
+    setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).voiceTryAgain, true);
   }
 }
 
 function createWelcomeChips() {
   const wrap = document.createElement('div');
   wrap.className = 'welcome-chips';
-  WELCOME_QUERIES.forEach(query => {
+  const queries = APP_LANGUAGE === 'ta' ? WELCOME_QUERIES_TA : WELCOME_QUERIES;
+  queries.forEach(query => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'welcome-chip';
@@ -494,7 +948,7 @@ async function sendMessage(text) {
   sendBtn.disabled = true;
   showTyping();
   try {
-    const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text, session_id: SESSION_ID }) });
+    const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text, session_id: SESSION_ID, language: APP_LANGUAGE }) });
     const data = await res.json();
     if (data.session_id) { SESSION_ID = data.session_id; localStorage.setItem('sf_session', SESSION_ID); }
     if (data.memory) updateContextUI(data.memory);
@@ -541,14 +995,15 @@ async function analyzeSoilImage(file) {
 }
 
 function updateWhatIfLabels() {
+  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
   if (whatifIrrVal) whatifIrrVal.textContent = `${parseInt(whatifIrrSlider.value)}%`;
   if (whatifRainVal) whatifRainVal.textContent = `${parseInt(whatifRainSlider.value)} mm`;
-  if (simulateBtn) simulateBtn.textContent = activeContext.district ? `▶ Simulate for ${activeContext.district}` : '▶ Run Simulation';
+  if (simulateBtn) simulateBtn.textContent = activeContext.district ? t.simulateFor(activeContext.district) : t.simulate;
 }
 
 function sendSimulation() {
   const district = activeContext.district;
-  if (!district) { renderMessage('⚠️ Please set a district in Manual Context or ask a district-specific question first, then run the simulation again.', 'bot'); return; }
+  if (!district) { renderMessage((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).noDistrictSimulation, 'bot'); return; }
   const irrDelta = parseInt(whatifIrrSlider.value);
   const rainDelta = parseInt(whatifRainSlider.value);
   let query = 'What if';
@@ -588,11 +1043,15 @@ async function clearChat() {
   renderWelcome();
 }
 
-function renderWelcome() { messagesList.innerHTML = ''; renderMessage(INTRO_MESSAGE, 'bot', true, true); }
+function renderWelcome() {
+  messagesList.innerHTML = '';
+  renderMessage(APP_LANGUAGE === 'ta' ? INTRO_MESSAGE_TA : INTRO_MESSAGE, 'bot', true, true);
+}
 
 sendBtn.addEventListener('click', () => sendMessage(chatInput.value.trim()));
 chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(chatInput.value.trim()); } });
 if (voiceInputBtn) voiceInputBtn.addEventListener('click', toggleVoiceInput);
+if (languageToggle) languageToggle.addEventListener('click', toggleLanguage);
 clearChatBtn.addEventListener('click', clearChat);
 sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
 if (ttsBtnGlobal) ttsBtnGlobal.addEventListener('click', toggleGlobalTTS);
@@ -611,7 +1070,7 @@ if (manualMonth) manualMonth.addEventListener('change', syncSeasonFromMonth);
 if (manualSeason) manualSeason.addEventListener('change', syncMonthFromSeason);
 if (window.speechSynthesis) {
   loadPreferredVoice();
-  speechSynthesis.onvoiceschanged = loadPreferredVoice;
+  speechSynthesis.onvoiceschanged = () => loadPreferredVoice();
 }
 initVoiceInput();
 
@@ -623,6 +1082,7 @@ document.addEventListener('click', e => {
 
 (async function init() {
   await resetAllOnLoad();
+  updateLanguageUI();
   updateTTSButton();
   updateWhatIfLabels();
   renderWelcome();

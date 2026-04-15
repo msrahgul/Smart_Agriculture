@@ -52,6 +52,10 @@ def _hedge():
     return random.choice(HEDGES)
 
 
+def _yield_label(crop: dict) -> str:
+    return f"{crop.get('avg_yield_t_ha', crop.get('avg_yield', 0))} tonnes/ha"
+
+
 # ════════════════════════════════════════════════════════════
 # 1. CROP RECOMMENDATION NLG
 # ════════════════════════════════════════════════════════════
@@ -89,26 +93,26 @@ def describe_crops(district: str, crops_data: dict, rain_data: dict = None, irri
 
     top1 = top[0]
     top1_name = top1["crop_name"]
-    top1_yield = top1["avg_yield"]
+    top1_yield = _yield_label(top1)
     top1_area = top1.get("area_ha", 0)
     top1_soil = top1["soil_type"].title()
     top1_season = top1["season"]
 
     paras.append(
         f"**{top1_name}** stands out as the strongest overall option, combining good historical yield, meaningful cultivation area, "
-        f"and consistent presence in the records. In {district}, it averages **{top1_yield} tonnes per hectare** "
+        f"and consistent presence in the records. In {district}, it averages **{top1_yield}** "
         f"on **{top1_soil}** during the **{top1_season}** season, with about **{top1_area:,} hectares** cultivated on average."
     )
 
     if len(top) >= 2:
         t2 = top[1]
         paras.append(
-            f"{_connector()} **{t2['crop_name']}** is another strong choice, with an average yield of **{t2['avg_yield']} t/ha** "
+            f"{_connector()} **{t2['crop_name']}** is another strong choice, with an average yield of **{_yield_label(t2)}** "
             f"and around **{t2.get('area_ha', 0):,} ha** cultivated. That makes it a practical alternative for both commercial farming and crop rotation."
         )
 
     if len(top) >= 3:
-        rest = [f"**{c['crop_name']}** ({c['avg_yield']} t/ha)" for c in top[2:5]]
+        rest = [f"**{c['crop_name']}** ({_yield_label(c)})" for c in top[2:5]]
         paras.append(f"Other promising crops in this environment include {', '.join(rest)}.")
 
     if rain_data and "error" not in rain_data:
@@ -131,6 +135,10 @@ def describe_crops(district: str, crops_data: dict, rain_data: dict = None, irri
                 f"{'This supports more flexible crop choices.' if irr_pct > 60 else 'So drought-tolerant or rainfall-aligned crops are safer choices.'}"
             )
 
+    conversion_note = crops_data.get("conversion_note")
+    if conversion_note:
+        paras.append(f"Yield values in the table are normalized to **tonnes/ha**. {conversion_note}")
+
     chosen_2 = top[1]['crop_name'] if len(top) > 1 else 'the crops listed above'
     paras.append(
         f"{_conclude()} if you're farming in {district}, starting with **{top1_name}** and **{chosen_2}** would be a sensible data-backed choice. "
@@ -141,12 +149,12 @@ def describe_crops(district: str, crops_data: dict, rain_data: dict = None, irri
 
     table_lines = [
         "",
-        "| Rank | Crop | Soil | Season | Avg Yield (t/ha) | Avg Area (ha) |",
+        "| Rank | Crop | Soil | Season | Avg Yield (tonnes/ha) | Avg Area (ha) |",
         "|------|------|------|--------|-----------------|---------------|",
     ]
     for i, c in enumerate(top, 1):
         table_lines.append(
-            f"| #{i} | **{c['crop_name']}** | {c['soil_type'].title()} | {c['season']} | {c['avg_yield']} | {c.get('area_ha', 0):,} |"
+            f"| #{i} | **{c['crop_name']}** | {c['soil_type'].title()} | {c['season']} | {_yield_label(c)} | {c.get('area_ha', 0):,} |"
         )
     paras.append("\n".join(table_lines))
 

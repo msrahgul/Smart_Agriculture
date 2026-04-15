@@ -94,12 +94,13 @@ def chat():
     data = request.get_json(silent=True) or {}
     message = (data.get("message") or "").strip()
     session_id = (data.get("session_id") or "").strip() or str(uuid.uuid4())
+    language = (data.get("language") or "en").strip().lower()
 
     if session_id not in conversation_store:
         conversation_store[session_id] = []
 
     history = conversation_store[session_id]
-    result = agent.process_query(message, history)
+    result = agent.process_query(message, history, language=language)
 
     history = [item for item in history if item.get("role") != "system_memory"]
     if result.get("memory"):

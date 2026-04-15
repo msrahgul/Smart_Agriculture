@@ -552,6 +552,43 @@ body {
     color: var(--text-1);
 }
 
+.language-toggle {
+    height: 38px;
+    padding: 0 10px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.045);
+    color: var(--text-2);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-ui);
+    font-size: 0.78rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.language-toggle:hover {
+    border-color: var(--border-strong);
+    background: rgba(39,194,107,0.12);
+    color: var(--text-1);
+}
+
+.language-toggle .lang-en,
+.language-toggle.tamil-mode .lang-ta {
+    color: var(--accent-2);
+}
+
+.language-toggle.tamil-mode .lang-en,
+.language-toggle .lang-ta {
+    color: var(--text-3);
+}
+
+.language-toggle .lang-divider {
+    color: var(--text-3);
+}
+
 .tts-toggle-btn.tts-active {
     background: rgba(39,194,107,0.14);
     border-color: var(--border-strong);

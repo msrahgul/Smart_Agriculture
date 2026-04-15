@@ -17,6 +17,9 @@ hist_df: pd.DataFrame = pd.DataFrame()
 profile_df: pd.DataFrame = pd.DataFrame()
 ALL_DISTRICTS: list = []
 
+NUT_TO_TONNES = 0.0012
+BALE_TO_TONNES = 0.17
+
 
 def load_data():
     """Load all datasets into module-level globals. Call once at startup."""
@@ -27,6 +30,8 @@ def load_data():
     hist_df["crop_name"] = hist_df["crop_name"].str.strip().str.title()
     hist_df["soil_type"] = hist_df["soil_type"].str.strip().str.lower()
     hist_df["season"] = hist_df["season"].str.strip().str.title()
+    hist_df["production_units"] = hist_df["production_units"].astype(str).str.strip().str.title()
+    hist_df["yield_t_ha"] = hist_df.apply(_yield_to_tonnes_per_ha, axis=1)
 
     profile_df = pd.read_csv(PROFILE_PATH)
     profile_df.columns = profile_df.columns.str.strip().str.lower()
@@ -60,16 +65,64 @@ def _profile_for(district: str) -> pd.Series | None:
     return row.iloc[0] if not row.empty else None
 
 
+def _mode_or_unknown(values: pd.Series) -> str:
+    clean = values.dropna().astype(str).str.strip()
+    if clean.empty:
+        return "Unknown"
+    mode = clean.mode()
+    return mode.iloc[0].title() if not mode.empty else clean.iloc[0].title()
+
+
+def _yield_to_tonnes_per_ha(row: pd.Series) -> float:
+    value = row.get("yield", 0)
+    if pd.isna(value):
+        return 0.0
+    unit = str(row.get("production_units", "")).strip().lower()
+    if unit == "nuts":
+        return float(value) * NUT_TO_TONNES
+    if unit == "bales":
+        return float(value) * BALE_TO_TONNES
+    return float(value)
+
+
+def _verified_crop_summary_rows(summary: pd.DataFrame, source_df: pd.DataFrame) -> pd.DataFrame:
+    """Keep only rows whose yield metrics match the source CSV rows."""
+    if summary.empty or source_df.empty:
+        return summary
+
+    verified_indexes = []
+    for idx, row in summary.iterrows():
+        source_rows = source_df[
+            (source_df["crop_name"] == row["crop_name"]) &
+            (source_df["soil_type"] == row["soil_type"]) &
+            (source_df["season"] == row["season"])
+        ]
+        if source_rows.empty:
+            continue
+
+        csv_avg_yield_t_ha = round(float(source_rows["yield_t_ha"].mean()), 2)
+        csv_avg_area_ha = int(round(float(source_rows["area"].mean())))
+        row_avg_yield_t_ha = round(float(row["avg_yield_t_ha"]), 2)
+        row_area_ha = int(round(float(row["area_ha"])))
+
+        if np.isclose(csv_avg_yield_t_ha, row_avg_yield_t_ha, atol=0.01) and csv_avg_area_ha == row_area_ha:
+            verified_indexes.append(idx)
+
+    return summary.loc[verified_indexes].copy()
+
+
 # ── 1. Crop Recommendations ────────────────────────────────────────────────────
 def get_top_crops(district: str, soil_type: str = None, season: str = None, top_n: int = 7) -> dict:
     """
     Return top crops for a district, optionally filtered by soil and season.
 
     Ranking is balanced using:
-    - average yield
+    - average yield converted to tonnes/hectare
     - cultivated area
     - number of records
-    This avoids recommending crops only because of one extreme metric.
+    This avoids recommending crops only because of one extreme metric, and it
+    keeps coconut "Nuts/ha" and cotton "Bales/ha" comparable with tonne-based
+    crop yields.
     """
     district = fuzzy_district(district)
     if not district:
@@ -93,39 +146,55 @@ def get_top_crops(district: str, soil_type: str = None, season: str = None, top_
         df.groupby(["crop_name", "soil_type", "season"])
         .agg(
             avg_yield=("yield", "mean"),
+            avg_yield_t_ha=("yield_t_ha", "mean"),
             max_yield=("yield", "max"),
+            max_yield_t_ha=("yield_t_ha", "max"),
             area_ha=("area", "mean"),
             records=("yield", "count"),
+            production_units=("production_units", _mode_or_unknown),
         )
         .reset_index()
     )
 
-    # Log-transform to reduce domination by very large values
-    summary["yield_score"] = np.log1p(summary["avg_yield"].clip(lower=0))
-    summary["area_score"] = np.log1p(summary["area_ha"].clip(lower=0))
-    summary["record_score"] = np.log1p(summary["records"].clip(lower=1))
+    # Rank with converted tonnes/hectare so crop yields are comparable even
+    # when the source dataset reports coconut as Nuts and cotton as Bales.
+    summary["yield_score"] = summary["avg_yield_t_ha"].rank(pct=True)
+
+    # Percentile scores keep area and record count useful without letting large
+    # hectare values drown out crop performance.
+    summary["area_score"] = summary["area_ha"].rank(pct=True)
+    summary["record_score"] = summary["records"].rank(pct=True)
 
     # Balanced score
     summary["rank_score"] = (
-        summary["yield_score"] * 0.50 +
-        summary["area_score"] * 0.35 +
+        summary["yield_score"] * 0.60 +
+        summary["area_score"] * 0.25 +
         summary["record_score"] * 0.15
     )
 
     summary = summary.sort_values(
-        ["rank_score", "avg_yield", "area_ha"],
+        ["rank_score", "avg_yield_t_ha", "area_ha"],
         ascending=[False, False, False]
-    ).head(top_n)
+    )
+
+    summary = _verified_crop_summary_rows(summary, df).head(top_n)
+    if summary.empty:
+        return {"error": f"No verified crop data available for {district}."}
 
     summary["avg_yield"] = summary["avg_yield"].round(2)
+    summary["avg_yield_t_ha"] = summary["avg_yield_t_ha"].round(2)
     summary["max_yield"] = summary["max_yield"].round(2)
+    summary["max_yield_t_ha"] = summary["max_yield_t_ha"].round(2)
     summary["area_ha"] = summary["area_ha"].round(0).astype(int)
     summary["rank_score"] = summary["rank_score"].round(3)
+    summary["yield_score"] = summary["yield_score"].round(3)
 
     return {
         "district": district,
         "soil_filter": soil_type or "all",
         "season_filter": season or "all",
+        "yield_unit": "tonnes/ha",
+        "conversion_note": "Coconut nuts are converted at 1.2 kg/nut; bale crops are converted at 170 kg/bale.",
         "crops": summary.to_dict(orient="records"),
     }
 
@@ -1127,9 +1196,9 @@ def get_multi_criteria_crops(
     ]
 
     if profit_target == "high":
-        filtered = sorted(filtered, key=lambda x: x.get("avg_yield", 0), reverse=True)
+        filtered = sorted(filtered, key=lambda x: x.get("rank_score", 0), reverse=True)
     elif profit_target == "low":
-        filtered = sorted(filtered, key=lambda x: x.get("avg_yield", 0))
+        filtered = sorted(filtered, key=lambda x: x.get("rank_score", 0))
 
     return {
         "district": district,
