@@ -143,10 +143,13 @@ INTENT_PATTERNS = {
 def _all_known_crops() -> list[str]:
     dynamic = []
     try:
-        if not de.hist_df.empty and "crop_name" in de.hist_df.columns:
-            dynamic = sorted({str(c).strip().lower() for c in de.hist_df["crop_name"].dropna().unique().tolist()})
+        dynamic = [str(c).strip().lower() for c in de.get_supported_crop_names(include_aliases=True)]
     except Exception:
-        dynamic = []
+        try:
+            if not de.hist_df.empty and "crop_name" in de.hist_df.columns:
+                dynamic = sorted({str(c).strip().lower() for c in de.hist_df["crop_name"].dropna().unique().tolist()})
+        except Exception:
+            dynamic = []
     return sorted(set(dynamic + KNOWN_CROPS + list(CROP_ALIASES.keys())))
 
 
@@ -608,11 +611,17 @@ def _canonical_crop(name: str | None) -> str | None:
     key = name.strip().lower()
     if key in CROP_ALIASES:
         return CROP_ALIASES[key]
+    supp = de.lookup_supplemental_crop(key)
+    if supp:
+        return supp.lower()
     crops = _all_known_crops()
     if key in crops:
         return key
     close = get_close_matches(key, crops, n=1, cutoff=0.75)
-    return close[0] if close else None
+    if close:
+        supp_close = de.lookup_supplemental_crop(close[0])
+        return supp_close.lower() if supp_close else close[0]
+    return None
 
 
 def _clean_entity_phrase(raw: str | None) -> str | None:
@@ -706,8 +715,11 @@ def _extract_crop(query: str) -> str | None:
             return canonical
     for crop in sorted(crops, key=len, reverse=True):
         if re.search(rf"\b{re.escape(crop)}\b", ql):
-            return _canonical_crop(crop)
-    return None
+            canonical = _canonical_crop(crop)
+            return canonical.title() if canonical else None
+    # fallback whole-query fuzzy against supplemental aliases
+    supp = de.lookup_supplemental_crop(query)
+    return supp.title() if supp else None
 
 
 def _get_memory(history: list | None) -> dict:
@@ -731,6 +743,38 @@ def _merge_memory(memory: dict, district=None, soil=None, season=None, month=Non
     if updated.get("season") and not updated.get("month"):
         updated["month"] = SEASON_DEFAULT_MONTH.get(updated["season"])
     return updated
+
+
+def _clear_memory_fields(memory: dict, fields: list[str]) -> dict:
+    updated = dict(memory or {})
+    for field in fields:
+        if field in updated:
+            updated[field] = None
+    if "season" in fields and "month" not in fields:
+        updated["month"] = None
+    if "month" in fields and "season" not in fields:
+        updated["season"] = None
+    return updated
+
+
+def _context_clear_fields(query: str) -> list[str]:
+    ql = query.lower().strip()
+    if not re.search(r"\b(?:remove|remve|clear|reset|forget|delete)\b", ql):
+        return []
+    fields = []
+    field_words = {
+        "crop": ["crop", "crops"],
+        "district": ["district", "location", "place"],
+        "soil": ["soil"],
+        "season": ["season"],
+        "month": ["month"],
+    }
+    for field, words in field_words.items():
+        if any(re.search(rf"\b{re.escape(word)}\b", ql) for word in words):
+            fields.append(field)
+    if re.search(r"\b(?:context|memory|everything|all)\b", ql):
+        fields = ["district", "soil", "season", "month", "crop"]
+    return fields
 
 
 def _detect_intent(query: str) -> str:
@@ -837,9 +881,9 @@ def _suggest_followups(intent: str, context: dict | None = None) -> list[str]:
     crop = ctx.get("crop") or "rice"
     options = {
         "crop_recommend": [
-            f"Fertilizer for {crop} in {district}",
             f"Rainfall in {district}",
-            f"How suitable is {crop} in {district}?",
+            f"Overview of {district} district",
+            f"What is the irrigation profile of {district}?",
         ],
         "fertilizer_recommendation": [
             f"Cost to grow {crop} in {district}",
@@ -987,6 +1031,21 @@ def _fmt_pest_prediction(data: dict) -> str:
 
 def _fallback_router(message: str, district: str, soil: str, season: str, crop: str, month: str, memory: dict) -> dict:
     intent = _detect_intent(message)
+    explicit_crop = _extract_crop(message)
+
+    crop_independent_intents = {
+        "crop_recommend",
+        "rainfall_info",
+        "wage_info",
+        "irrigation_info",
+        "pest_risk",
+        "district_overview",
+        "multi_criteria",
+    }
+    ignored_memory_crop = False
+    if intent in crop_independent_intents and not explicit_crop:
+        crop = None
+        ignored_memory_crop = True
 
     if intent == "cost_estimate":
         district = district or "Coimbatore"
@@ -998,6 +1057,8 @@ def _fallback_router(message: str, district: str, soil: str, season: str, crop: 
         district = district or "Coimbatore"
 
     new_memory = _merge_memory(memory, district=district, soil=soil, season=season, month=month, crop=crop)
+    if ignored_memory_crop:
+        new_memory["crop"] = None
     ctx = {"district": district, "soil": soil, "season": season, "month": month, "crop": crop}
     response_data = {}
 
@@ -1015,10 +1076,16 @@ def _fallback_router(message: str, district: str, soil: str, season: str, crop: 
 
     explicit_unknown_crop = _candidate_unknown_crop(message)
     if intent in crop_required and explicit_unknown_crop and not _extract_crop(message):
-        text = _entity_not_found_message("crop", explicit_unknown_crop)
-        unknown_crop_memory = _merge_memory(memory, district=district, soil=soil, season=season, month=month)
-        unknown_crop_memory["crop"] = None
-        return {"text": _ensure_followup_chips(text, intent, {**ctx, "crop": None}), "intent": intent, "district": district, "memory": unknown_crop_memory}
+        supp_crop = de.lookup_supplemental_crop(explicit_unknown_crop)
+        if supp_crop:
+            crop = supp_crop
+            new_memory = _merge_memory(memory, district=district, soil=soil, season=season, month=month, crop=crop)
+            ctx = {"district": district, "soil": soil, "season": season, "month": month, "crop": crop}
+        else:
+            text = _entity_not_found_message("crop", explicit_unknown_crop)
+            unknown_crop_memory = _merge_memory(memory, district=district, soil=soil, season=season, month=month)
+            unknown_crop_memory["crop"] = None
+            return {"text": _ensure_followup_chips(text, intent, {**ctx, "crop": None}), "intent": intent, "district": district, "memory": unknown_crop_memory}
 
     if intent == "best_district_for_crop":
         requested_season = _extract_season(message)
@@ -1036,6 +1103,12 @@ def _fallback_router(message: str, district: str, soil: str, season: str, crop: 
             text = _entity_not_found_message("crop", unknown)
         else:
             text = f"Which crop would you like me to use for **{district or 'this district'}**?"
+        return {"text": _ensure_followup_chips(text, intent, ctx), "intent": intent, "district": district, "memory": new_memory}
+
+    is_fallback_crop = bool(crop and de.is_supplemental_crop(crop))
+    fallback_supported_intents = {"suitability", "whatif", "planting_time", "fertilizer_recommendation"}
+    if is_fallback_crop and intent not in fallback_supported_intents:
+        text = de.get_fallback_only_message(crop)
         return {"text": _ensure_followup_chips(text, intent, ctx), "intent": intent, "district": district, "memory": new_memory}
 
     if intent == "crop_recommend":
@@ -1129,6 +1202,18 @@ def process_query(message: str, history: list = None, language: str | None = Non
         return finalize({"text": WELCOME_TEXT, "intent": "greeting", "district": None, "memory": blank_mem})
 
     memory = _get_memory(history)
+    clear_fields = _context_clear_fields(message)
+    if clear_fields:
+        new_memory = _clear_memory_fields(memory, clear_fields)
+        fields_text = ", ".join(field.title() for field in clear_fields)
+        text = f"Got it. I cleared **{fields_text}** from the active context."
+        return finalize({
+            "text": _ensure_followup_chips(text, "context_update", new_memory),
+            "intent": "context_update",
+            "district": new_memory.get("district"),
+            "memory": new_memory,
+        })
+
     quick_district = _extract_district(message)
     quick_soil = _extract_soil(message)
     quick_month = _extract_month(message)

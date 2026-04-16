@@ -3,6 +3,7 @@ data_engine.py – Data Query & Analysis Layer
 Loads all datasets once and exposes clean functions for the agent.
 """
 import os
+import json
 import pandas as pd
 import numpy as np
 from difflib import get_close_matches
@@ -11,10 +12,12 @@ from difflib import get_close_matches
 DATA_DIR = "data"
 HIST_PATH = os.path.join(DATA_DIR, "TamilNadu_ML_Master_Historical.csv")
 PROFILE_PATH = os.path.join(DATA_DIR, "TamilNadu_District_Profile_2024_25.csv")
+SUPP_PATH = os.path.join(DATA_DIR, "supplemental_crop_profiles_tn.csv")
 
 # ── Loaded dataframes (populated on load_data()) ───────────────────────────────
 hist_df: pd.DataFrame = pd.DataFrame()
 profile_df: pd.DataFrame = pd.DataFrame()
+supplemental_df: pd.DataFrame = pd.DataFrame()
 ALL_DISTRICTS: list = []
 
 NUT_TO_TONNES = 0.0012
@@ -23,7 +26,7 @@ BALE_TO_TONNES = 0.17
 
 def load_data():
     """Load all datasets into module-level globals. Call once at startup."""
-    global hist_df, profile_df, ALL_DISTRICTS
+    global hist_df, profile_df, supplemental_df, ALL_DISTRICTS
     hist_df = pd.read_csv(HIST_PATH, low_memory=False)
     hist_df.columns = hist_df.columns.str.strip().str.lower()
     hist_df["district"] = hist_df["district"].str.strip().str.title()
@@ -37,11 +40,28 @@ def load_data():
     profile_df.columns = profile_df.columns.str.strip().str.lower()
     profile_df["district"] = profile_df["district"].str.strip().str.title()
 
+    if os.path.exists(SUPP_PATH):
+        supplemental_df = pd.read_csv(SUPP_PATH)
+        supplemental_df.columns = supplemental_df.columns.str.strip().str.lower()
+        if "crop_name" in supplemental_df.columns:
+            supplemental_df["crop_name"] = supplemental_df["crop_name"].astype(str).str.strip().str.title()
+        for col in ["aliases", "preferred_soils", "suitable_soils", "preferred_seasons", "planting_months", "district_hints", "notes", "disclaimer", "supported_queries", "confidence", "source_type", "soil_scores_json", "season_scores_json"]:
+            if col in supplemental_df.columns:
+                supplemental_df[col] = supplemental_df[col].fillna("").astype(str).str.strip()
+        if "water_need_mm" in supplemental_df.columns:
+            supplemental_df["water_need_mm"] = pd.to_numeric(supplemental_df["water_need_mm"], errors="coerce").fillna(600).astype(float)
+    else:
+        supplemental_df = pd.DataFrame()
+
     ALL_DISTRICTS = sorted(
         list(set(hist_df["district"].dropna().unique().tolist() +
                  profile_df["district"].dropna().unique().tolist()))
     )
-    print(f"[data_engine] Loaded {len(hist_df):,} historical rows | {len(profile_df)} district profiles | {len(ALL_DISTRICTS)} districts")
+    print(
+        f"[data_engine] Loaded {len(hist_df):,} historical rows | "
+        f"{len(profile_df)} district profiles | {len(ALL_DISTRICTS)} districts | "
+        f"{len(supplemental_df)} fallback crop profiles"
+    )
 
 
 # ── Utility ────────────────────────────────────────────────────────────────────
@@ -565,6 +585,100 @@ def get_all_districts() -> list:
     return ALL_DISTRICTS
 
 
+def _split_pipe(value: str) -> list[str]:
+    value = str(value or "").strip()
+    if not value:
+        return []
+    return [part.strip() for part in value.split("|") if part.strip()]
+
+
+def _parse_json_map(value) -> dict:
+    if isinstance(value, dict):
+        return value
+    raw = str(value or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
+def lookup_supplemental_crop(name: str | None) -> str | None:
+    if supplemental_df.empty or not name:
+        return None
+    query = str(name).strip().lower()
+    if not query:
+        return None
+
+    for _, row in supplemental_df.iterrows():
+        crop_name = str(row.get("crop_name", "")).strip()
+        if crop_name.lower() == query:
+            return crop_name
+        aliases = [a.strip().lower() for a in str(row.get("aliases", "")).split("|") if a.strip()]
+        if query in aliases:
+            return crop_name
+
+    choices = []
+    alias_map = {}
+    for _, row in supplemental_df.iterrows():
+        crop_name = str(row.get("crop_name", "")).strip()
+        if crop_name:
+            choices.append(crop_name)
+            alias_map[crop_name.lower()] = crop_name
+        for alias in [a.strip() for a in str(row.get("aliases", "")).split("|") if a.strip()]:
+            choices.append(alias)
+            alias_map[alias.lower()] = crop_name
+    close = get_close_matches(query, choices, n=1, cutoff=0.72)
+    if not close:
+        return None
+    return alias_map.get(close[0].lower(), str(close[0]).title())
+
+
+def get_supplemental_crop_profile(crop_name: str | None) -> dict | None:
+    canonical = lookup_supplemental_crop(crop_name)
+    if not canonical or supplemental_df.empty:
+        return None
+    row = supplemental_df[supplemental_df["crop_name"].str.lower() == canonical.lower()]
+    if row.empty:
+        return None
+    rec = row.iloc[0].to_dict()
+    rec["crop_name"] = canonical
+    rec["soil_scores"] = _parse_json_map(rec.get("soil_scores_json"))
+    rec["season_scores"] = _parse_json_map(rec.get("season_scores_json"))
+    rec["preferred_soils_list"] = _split_pipe(rec.get("preferred_soils", ""))
+    rec["suitable_soils_list"] = _split_pipe(rec.get("suitable_soils", ""))
+    rec["preferred_seasons_list"] = _split_pipe(rec.get("preferred_seasons", ""))
+    return rec
+
+
+def is_supplemental_crop(crop_name: str | None) -> bool:
+    return get_supplemental_crop_profile(crop_name) is not None
+
+
+def get_supported_crop_names(include_aliases: bool = True) -> list[str]:
+    names = set(hist_df["crop_name"].dropna().astype(str).str.strip().str.title().tolist()) if not hist_df.empty else set()
+    if not supplemental_df.empty:
+        names.update(supplemental_df["crop_name"].dropna().astype(str).str.strip().str.title().tolist())
+        if include_aliases and "aliases" in supplemental_df.columns:
+            for raw in supplemental_df["aliases"].dropna().astype(str):
+                for alias in raw.split("|"):
+                    alias = alias.strip()
+                    if alias:
+                        names.add(alias.lower())
+    return sorted(names)
+
+
+def get_fallback_only_message(crop_name: str) -> str:
+    profile = get_supplemental_crop_profile(crop_name) or {}
+    note = profile.get("disclaimer") or "This is assumption-based fallback guidance only."
+    return (
+        f"I can only answer **suitability-style guidance** for **{crop_name.title()}** from the fallback crop profile. "
+        f"I do **not** have reliable historical yield / profit / district-ranking data for it. {note}"
+    )
+
+
 # ══════════════════════════════════════════════════════════════
 # 9. ML MODEL PREDICTION BRIDGE
 # ══════════════════════════════════════════════════════════════
@@ -846,6 +960,18 @@ def get_crop_planting_time(crop_name: str, district: str = None) -> dict:
             df = hist_df[hist_df["crop_name"] == crop_title]
 
     if df.empty:
+        profile = get_supplemental_crop_profile(crop_title)
+        if profile:
+            best_season = (profile.get("preferred_seasons_list") or ["Whole Year"])[0]
+            return {
+                "crop": profile["crop_name"],
+                "district": district_name,
+                "best_season": best_season,
+                "best_months": profile.get("planting_months") or SEASON_MONTH_WINDOWS.get(best_season, "locally suitable planting window"),
+                "note": f"{profile.get('notes', '').strip()} {profile.get('disclaimer', '').strip()}".strip(),
+                "season_summary": [],
+                "profile_source": "supplemental_assumption",
+            }
         return {"error": f"No planting season data available for {crop_title}."}
 
     season_summary = (
@@ -867,6 +993,7 @@ def get_crop_planting_time(crop_name: str, district: str = None) -> dict:
         "best_months": specific.get("months") or SEASON_MONTH_WINDOWS.get(best_season, "use the locally recommended sowing window for this season"),
         "note": specific.get("note"),
         "season_summary": season_summary.to_dict(orient="records"),
+        "profile_source": "historical_dataset",
     }
 
 
@@ -881,49 +1008,53 @@ def compute_suitability_score(
     """
     Compute a 0–10 suitability score for growing crop_name in district.
 
-    Sub-scores:
-      1. Yield Performance Score  (0–3): based on historical avg yield rank in district
-      2. Rainfall Alignment Score (0–2.5): crop water needs vs district rainfall
-      3. Soil Compatibility Score (0–2): based on CROP_SOIL_COMPATIBILITY table
-      4. Irrigation Coverage Score(0–1.5): irrigation % supports this crop's water needs
-      5. Historical Presence Score(0–1): whether this crop has been grown here historically
-
-    Returns a dict with total_score, subscores, label, and reasoning.
+    Uses the historical dataset when the crop exists there.
+    If the crop is missing, falls back to the manually-created supplemental crop
+    profile and clearly marks the result as assumption-based.
     """
     district = fuzzy_district(district)
     if not district:
         return {"error": "District not found."}
 
-    crop_title = crop_name.strip().title()
+    crop_title = (crop_name or "").strip().title()
+    if not crop_title:
+        return {"error": "Crop not found."}
 
-    # ── 1. Historical yield rank ──────────────────────────────────────────────
     df = _hist_for(district)
     crop_df = df[df["crop_name"].str.lower() == crop_title.lower()]
-    all_crops_avg = (
-        df.groupby("crop_name")["yield"].mean().sort_values(ascending=False).reset_index()
-    )
+    all_crops_avg = df.groupby("crop_name")["yield"].mean().sort_values(ascending=False).reset_index()
     historical_presence = not crop_df.empty
+    supplemental_profile = None if historical_presence else get_supplemental_crop_profile(crop_title)
 
+    if not historical_presence and not supplemental_profile:
+        return {"error": f"No suitability profile available for {crop_title}."}
+
+    # 1. Base agronomic / yield component
     if historical_presence:
         crop_avg_yield = crop_df["yield"].mean()
         max_yield_in_district = all_crops_avg["yield"].max() if not all_crops_avg.empty else crop_avg_yield
         yield_score = min(3.0, round((crop_avg_yield / max(max_yield_in_district, 0.01)) * 3.0, 2))
+        profile_source = "historical_dataset"
     else:
-        yield_score = 0.5  # some base credit — crop not local but may still grow
+        preferred_seasons = supplemental_profile.get("preferred_seasons_list") or []
+        season_fit = 0.0
+        if season:
+            season_fit = float((supplemental_profile.get("season_scores") or {}).get(str(season), 0.75))
+        elif preferred_seasons:
+            season_fit = 0.9
+        else:
+            season_fit = 0.75
+        yield_score = round(min(3.0, 1.2 + season_fit), 2)
+        profile_source = "supplemental_assumption"
 
-    # ── 2. Rainfall alignment ─────────────────────────────────────────────────
+    # 2. Rainfall alignment
     rain_data = get_rainfall_stats(district)
-    annual_mm = rain_data.get("avg_annual_mm", 0) + extra_rainfall_mm
-    sw_mm = rain_data.get("sw_monsoon_mm", 0)
-    ne_mm = rain_data.get("ne_monsoon_mm", 0)
-
+    annual_mm = max(0.0, float(rain_data.get("avg_annual_mm", 0) or 0) + float(extra_rainfall_mm or 0))
     crop_key = crop_title if crop_title in CROP_WATER_REQ_MM else None
-    needed_mm = CROP_WATER_REQ_MM.get(crop_key, 600) if crop_key else 600
+    needed_mm = float(CROP_WATER_REQ_MM.get(crop_key, 600)) if crop_key else float((supplemental_profile or {}).get("water_need_mm", 600))
+    effective_water = annual_mm * max(0.3, 1.0 + (float(irrigation_delta_pct or 0) / 100.0))
 
-    # Effective water with irrigation change
-    effective_water = annual_mm * max(0.3, 1.0 + (irrigation_delta_pct / 100.0))
-
-    ratio = effective_water / max(needed_mm, 1)
+    ratio = effective_water / max(needed_mm, 1.0)
     if ratio >= 1.2:
         rain_score = 2.5
     elif ratio >= 1.0:
@@ -935,33 +1066,35 @@ def compute_suitability_score(
     else:
         rain_score = 0.5
 
-    # ── 3. Soil compatibility ─────────────────────────────────────────────────
+    # 3. Soil compatibility
     if not soil_type:
         df_soil = df.groupby("soil_type").size()
         soil_type = df_soil.idxmax() if not df_soil.empty else "red soil"
+    soil_type = str(soil_type).lower().strip()
 
-    soil_compat = CROP_SOIL_COMPATIBILITY.get(crop_title, {})
-    compat_val = soil_compat.get(soil_type.lower(), 0.65)  # default moderate
+    if historical_presence:
+        soil_compat = CROP_SOIL_COMPATIBILITY.get(crop_title, {})
+        compat_val = float(soil_compat.get(soil_type, 0.65))
+    else:
+        compat_val = float((supplemental_profile.get("soil_scores") or {}).get(soil_type, 0.55))
     soil_score = round(compat_val * 2.0, 2)
 
-    # ── 4. Irrigation coverage ────────────────────────────────────────────────
+    # 4. Irrigation coverage
     irr_data = get_irrigation_profile(district)
-    irr_pct = irr_data.get("irrigation_coverage_pct", 0)
-    effective_irr = max(0, min(100, irr_pct + irrigation_delta_pct))
+    irr_pct = float(irr_data.get("irrigation_coverage_pct", 0) or 0)
+    effective_irr = max(0.0, min(100.0, irr_pct + float(irrigation_delta_pct or 0)))
 
-    if needed_mm > 900:  # water-intensive — needs high irrigation
-        irr_score = round(min(1.5, (effective_irr / 70) * 1.5), 2)
-    else:  # drought-tolerant — irrigation is a bonus
-        irr_score = round(min(1.5, 0.8 + (effective_irr / 100) * 0.7), 2)
+    if needed_mm > 900:
+        irr_score = round(min(1.5, (effective_irr / 70.0) * 1.5), 2)
+    else:
+        irr_score = round(min(1.5, 0.8 + (effective_irr / 100.0) * 0.7), 2)
 
-    # ── 5. Historical presence ────────────────────────────────────────────────
-    presence_score = 1.0 if historical_presence else 0.3
+    # 5. Historical presence
+    presence_score = 1.0 if historical_presence else 0.0
 
-    # ── Total ─────────────────────────────────────────────────────────────────
     total = round(yield_score + rain_score + soil_score + irr_score + presence_score, 1)
     total = min(10.0, total)
 
-    # Label
     if total >= 8.5:
         label = "Excellent"
     elif total >= 7.0:
@@ -973,7 +1106,7 @@ def compute_suitability_score(
     else:
         label = "Poor"
 
-    return {
+    result = {
         "district": district,
         "crop": crop_title,
         "soil_type": soil_type,
@@ -993,7 +1126,21 @@ def compute_suitability_score(
         "annual_rainfall_mm": round(annual_mm, 0),
         "irrigation_pct": effective_irr,
         "historical_presence": historical_presence,
+        "profile_source": profile_source,
     }
+
+    if supplemental_profile:
+        result.update({
+            "fallback_crop": True,
+            "category": supplemental_profile.get("category"),
+            "planting_months": supplemental_profile.get("planting_months"),
+            "district_hints": supplemental_profile.get("district_hints"),
+            "notes": supplemental_profile.get("notes"),
+            "disclaimer": supplemental_profile.get("disclaimer"),
+            "supported_queries": supplemental_profile.get("supported_queries"),
+            "confidence": supplemental_profile.get("confidence"),
+        })
+    return result
 
 
 def compute_whatif_simulation(

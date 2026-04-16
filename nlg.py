@@ -694,6 +694,8 @@ def describe_planting_time(data: dict) -> str:
 
     if note:
         paras.append(f"**Practical note:** {note}")
+    if data.get("profile_source") == "supplemental_assumption":
+        paras.append("⚠️ This planting-time answer comes from the manually created fallback crop profile, not the original historical crop records.")
 
     if summary:
         lines = ["", "| Season | Records | Avg Yield (t/ha) | Avg Area (ha) |", "|--------|---------|------------------|---------------|"]
@@ -728,8 +730,12 @@ def describe_suitability_score(district: str, crop: str, data: dict) -> str:
     emoji_map = {"Excellent": "🟢", "Very Good": "🟢", "Moderate": "🟡", "Below Average": "🟠", "Poor": "🔴"}
     emoji = emoji_map.get(label, "🟡")
 
+    profile_source = data.get("profile_source", "historical_dataset")
+    intro = "This score combines yield performance, rainfall alignment, soil compatibility, irrigation coverage, and historical presence."
+    if profile_source == "supplemental_assumption":
+        intro = "This score is based on a **manually created fallback crop profile** plus district rainfall / irrigation conditions. It is **not from the original historical dataset or trained model**, so it may be wrong."
     paras = [
-        f"### 📊 Suitability Analysis — {crop} in {district}\n\n{emoji} **{total}/10 — {label}**\n\nThis score combines yield performance, rainfall alignment, soil compatibility, irrigation coverage, and historical presence."
+        f"### 📊 Suitability Analysis — {crop} in {district}\n\n{emoji} **{total}/10 — {label}**\n\n{intro}"
     ]
 
     table_lines = [
@@ -753,7 +759,12 @@ def describe_suitability_score(district: str, crop: str, data: dict) -> str:
         f"**Irrigation coverage used in scoring:** {irr_pct}%."
     )
 
-    if not is_present:
+    if data.get("profile_source") == "supplemental_assumption":
+        paras.append(
+            f"⚠️ **Assumption-based fallback used:** {data.get('disclaimer', 'This crop profile was manually added for fallback suitability guidance only.')} "
+            f"{('District hint: ' + data.get('district_hints')) if data.get('district_hints') else ''}"
+        )
+    elif not is_present:
         paras.append("⚠️ **Note:** This crop has not been historically cultivated in this district in our dataset. The score is based on environmental suitability analysis.")
 
     paras.append(f"💡 Try a scenario test next: *\"What if irrigation improved in {district} for {crop}?\"*")
@@ -783,6 +794,8 @@ def describe_whatif(district: str, crop: str, data: dict) -> str:
         f"| Scenario | Score | Rating |\n|----------|-------|--------|\n| Current (Baseline) | **{b_score}/10** | {b_label} |\n| After Changes | **{m_score}/10** | {m_label} |\n| **Delta** | **{delta_str}** | — |",
         verdict or "This comparison shows how the score shifts under the simulated conditions.",
     ]
+    if baseline.get("profile_source") == "supplemental_assumption" or modified.get("profile_source") == "supplemental_assumption":
+        paras.append("⚠️ **Fallback assumption note:** this scenario uses the manually created supplemental crop profile, not the original historical crop dataset.")
 
     b_sub = baseline.get("subscores", {})
     m_sub = modified.get("subscores", {})
