@@ -118,7 +118,7 @@ UNKNOWN_QUERY_TEXT = (
 )
 
 INTENT_PATTERNS = {
-    "best_district_for_crop": [r"which district.*(?:best|grow|grows|suitable)", r"where.*(?:best|grow|grows).*(?:crop|rice|coconut|groundnut|sugarcane|cotton|maize|banana)", r"best district.*(?:for|to grow)", r"district.*(?:grows|grow).*best"],
+    "best_district_for_crop": [r"which district.*(?:best|grow|grows|suitable)", r"where.*(?:best|grow|grows).*(?:crop|rice|coconut|groundnut|sugarcane|cotton|maize|banana)", r"best district", r"district.*(?:grows|grow).*best"],
     "crop_recommend": [r"best crop", r"best crops", r"which crop", r"what crop", r"recommend crop", r"top crop", r"good crop", r"what can i grow"],
     "suitability": [r"suitab", r"can\s*i grow", r"cani grow", r"can .* grow", r"is .+ good for", r"how suitable", r"score", r"rate", r"evaluate"],
     "rainfall_info": [r"\brain(?:fall)?\b", r"precipitation", r"\bmonsoon rainfall\b", r"how much rain", r"annual rain"],
@@ -160,6 +160,22 @@ def _is_tamil_text(text: str) -> bool:
 def _normalize_tamil_query(message: str) -> str:
     normalized = message
     additions = []
+    direct_replacements = {
+        "கூலி": "wage",
+        "சம்பளம்": "wage",
+        "வேளாண்மை கூலி": "wage",
+        "மகசூல் போக்கு": "yield trend",
+        "மகசூல் நிலை": "yield trend",
+        "சிறந்த மாவட்டம்": "best district",
+        "எந்த மாவட்டம்": "which district",
+        "என்ன ஆகும்": "what if",
+        "குறைந்தால்": "reduced",
+        "அதிகரித்தால்": "increased",
+        "குறைத்தால்": "reduced",
+        "மாறினால்": "changed",
+    }
+    for tamil, english in direct_replacements.items():
+        normalized = normalized.replace(tamil, english)
     for tamil, english in TAMIL_QUERY_REPLACEMENTS.items():
         normalized = normalized.replace(tamil, english)
     for tamil, english in TAMIL_DISTRICT_ALIASES.items():
@@ -188,10 +204,18 @@ def _ta(value: str | None) -> str:
         "tapioca": "மரவள்ளி", "ginger": "இஞ்சி", "sweet potato": "சர்க்கரைவள்ளிக் கிழங்கு", "guar seed": "கொத்தவரை விதை",
         "coimbatore": "கோயம்புத்தூர்", "madurai": "மதுரை", "thanjavur": "தஞ்சாவூர்", "cuddalore": "கடலூர்",
         "erode": "ஈரோடு", "salem": "சேலம்", "dharmapuri": "தர்மபுரி", "tiruchirapalli": "திருச்சிராப்பள்ளி",
+        "villupuram": "விழுப்புரம்", "tiruvarur": "திருவாரூர்", "kancheepuram": "காஞ்சிபுரம்", "nagapattinam": "நாகப்பட்டினம்",
+        "tiruvannamalai": "திருவண்ணாமலை", "ariyalur": "அரியலூர்", "chennai": "சென்னை", "dindigul": "திண்டுக்கல்",
+        "kallakurichi": "கள்ளக்குறிச்சி", "karur": "கரூர்", "krishnagiri": "கிருஷ்ணகிரி", "namakkal": "நாமக்கல்",
+        "perambalur": "பெரம்பலூர்", "pudukkottai": "புதுக்கோட்டை", "ramanathapuram": "ராமநாதபுரம்", "ranipet": "ராணிப்பேட்டை",
+        "sivagangai": "சிவகங்கை", "tenkasi": "தென்காசி", "theni": "தேனி", "thoothukudi": "தூத்துக்குடி",
+        "tirunelveli": "திருநெல்வேலி", "tirupathur": "திருப்பத்தூர்", "tiruppur": "திருப்பூர்", "tiruvallur": "திருவள்ளூர்",
+        "vellore": "வேலூர்", "virudhunagar": "விருதுநகர்",
         "red soil": "சிவப்பு மண்", "black soil": "கருப்பு மண்", "clay soil": "களிமண்",
         "alluvial soil": "வண்டல் மண்", "Kharif": "காரிஃப் / மழைக்காலம்", "Rabi": "ரபி",
         "Summer": "கோடை", "Winter": "குளிர்காலம்", "Autumn": "இலையுதிர் காலம்",
         "Whole Year": "முழு ஆண்டு",
+        "Moderate": "மிதமானது", "Below Average": "சராசரிக்கு கீழ்", "Very Good": "மிக நல்லது", "Excellent": "மிகச் சிறந்தது", "Poor": "பலவீனமானது",
     }
     if not value:
         return ""
@@ -507,7 +531,631 @@ def _strict_tamil_summary(intent: str, memory: dict, text: str = "") -> str:
     return "உங்கள் கேள்விக்கான பதில் தமிழ்நாடு வேளாண்மை தரவின் அடிப்படையில் மதிப்பிடப்பட்டுள்ளது. கூடுதல் விவரத்திற்கு மாவட்டம், பயிர், மண் வகை அல்லது பருவத்தை குறிப்பிட்டு கேளுங்கள்."
 
 
+def _format_tamil_cost_estimate(result: dict) -> str | None:
+    data = (result.get("data") or {}).get("cost_data") or {}
+    if not data or "error" in data:
+        return None
+
+    district = _ta(data.get("district") or (result.get("memory") or {}).get("district") or "")
+    crop = _ta(data.get("crop") or (result.get("memory") or {}).get("crop") or "")
+    area = data.get("area_acres", 1.0)
+    total_lo = data.get("total_cost_min", 0)
+    total_hi = data.get("total_cost_max", 0)
+    cpa_lo = data.get("cost_per_acre_min", 0)
+    cpa_hi = data.get("cost_per_acre_max", 0)
+    wage_adj = data.get("wage_adjustment_factor", 1.0)
+    comps = data.get("components") or {}
+    labels = {
+        "seeds": "விதை",
+        "fertilizer": "உரம்",
+        "labour": "கூலி",
+        "irrigation": "பாசனம்",
+        "pesticide": "பூச்சிக்கொல்லி",
+    }
+
+    wage_note = ""
+    if isinstance(wage_adj, (int, float)) and wage_adj > 1.1:
+        wage_note = f" இந்த மாவட்டத்தில் கூலி சராசரியை விட அதிகமாக இருப்பதால் கூலி செலவு சுமார் **{round((wage_adj - 1) * 100)}%** உயர்த்திக் கணக்கிடப்பட்டுள்ளது."
+    elif isinstance(wage_adj, (int, float)) and wage_adj < 0.9:
+        wage_note = f" இந்த மாவட்டத்தில் கூலி சராசரியை விட குறைவாக இருப்பதால் கூலி செலவு சுமார் **{round((1 - wage_adj) * 100)}%** குறைத்து கணக்கிடப்பட்டுள்ளது."
+
+    lines = [
+        "| செலவு பகுதி | குறைந்தபட்சம் (ரூ.) | அதிகபட்சம் (ரூ.) |",
+        "|------------|-------------------|------------------|",
+    ]
+    for key in ["seeds", "fertilizer", "labour", "irrigation", "pesticide"]:
+        vals = comps.get(key)
+        if vals:
+            lines.append(f"| {labels.get(key, key)} | ரூ.{vals.get('min', 0):,} | ரூ.{vals.get('max', 0):,} |")
+    lines.append(f"| **மொத்தம்** | **ரூ.{total_lo:,}** | **ரூ.{total_hi:,}** |")
+
+    biggest = ""
+    if comps:
+        max_comp = max(comps, key=lambda key: comps[key].get("max", 0))
+        max_val = comps[max_comp].get("max", 0)
+        pct = round(max_val / total_hi * 100) if total_hi else 0
+        advice = {
+            "labour": "கூலி செலவை குறைக்க இயந்திர நடவு அல்லது அறுவடை இயந்திரங்களைப் பயன்படுத்தலாம்.",
+            "seeds": "அரசு அங்கீகரித்த தரமான விதைகளைப் பயன்படுத்துவது நல்லது.",
+            "fertilizer": "மண் பரிசோதனை செய்து உர அளவை திட்டமிட்டால் செலவை குறைக்கலாம்.",
+            "irrigation": "சொட்டு அல்லது தெளிப்பு பாசனம் நீர் மற்றும் பாசன செலவை குறைக்க உதவும்.",
+            "pesticide": "ஒருங்கிணைந்த பூச்சி மேலாண்மை பூச்சிக்கொல்லி செலவை குறைத்து மண் ஆரோக்கியத்தையும் பாதுகாக்கும்.",
+        }.get(max_comp, "இந்த செலவு பகுதியை திட்டமிட்டு கட்டுப்படுத்தலாம்.")
+        biggest = f"\n\n**அதிக செலவு பகுதி:** {labels.get(max_comp, max_comp)} அதிகபட்சம் **ரூ.{max_val:,}** வரை ஆகலாம். இது மொத்த செலவில் சுமார் **{pct}%**. {advice}"
+
+    return (
+        f"### சாகுபடி செலவு மதிப்பீடு - {district} மாவட்டத்தில் {crop}\n\n"
+        f"**{area:g} ஏக்கர்** பரப்பளவில் **{crop}** பயிரிட மதிப்பிடப்பட்ட முழு பருவ செலவு கீழே உள்ளது.{wage_note}\n\n"
+        + "\n".join(lines)
+        + f"\n\n**மொத்த முதலீடு:** ரூ.{total_lo:,} முதல் ரூ.{total_hi:,} வரை.\n\n"
+        f"**ஏக்கருக்கு செலவு:** ரூ.{cpa_lo:,} முதல் ரூ.{cpa_hi:,} வரை."
+        + biggest
+        + "\n\n*இவை திட்டமிட உதவும் மதிப்பீடுகள். உண்மையான செலவு உள்ளீட்டு விலை, நில அளவு, கூலி நிலை மற்றும் உள்ளூர் சந்தை நிலைமையைப் பொறுத்து மாறலாம்.*"
+    )
+
+
+def _format_tamil_wage_info(result: dict) -> str | None:
+    data = (result.get("data") or {}).get("wage_data") or {}
+    wages = data.get("wages") or {}
+    if not wages:
+        return None
+    district = _ta(data.get("district") or (result.get("memory") or {}).get("district") or "")
+    year = data.get("year", "")
+    label_map = {
+        "Sowers Pluckers Men": "விதைப்பு/பறிப்பு - ஆண்",
+        "Sowers Pluckers Women": "விதைப்பு/பறிப்பு - பெண்",
+        "Transplanters Weeders Men": "நடவு/களை எடுப்பு - ஆண்",
+        "Transplanters Weeders Women": "நடவு/களை எடுப்பு - பெண்",
+        "Reapers Harvesters Men": "அறுவடை - ஆண்",
+        "Reapers Harvesters Women": "அறுவடை - பெண்",
+        "Other Operations Men": "மற்ற பணிகள் - ஆண்",
+        "Other Operations Women": "மற்ற பணிகள் - பெண்",
+        "Tractor Driver Men": "டிராக்டர் ஓட்டுநர்",
+    }
+    lines = ["| வேலை வகை | தின கூலி |", "|----------|----------|"]
+    for key, value in wages.items():
+        wage_value = str(value).replace("₹", "ரூ.").replace("/day", "/நாள்")
+        lines.append(f"| {label_map.get(key, key)} | {wage_value} |")
+    return (
+        f"### வேளாண்மை கூலி விவரம் - {district}\n\n"
+        f"**ஆண்டு:** {year}\n\n"
+        + "\n".join(lines)
+        + "\n\n*கூலி விவரம் மாவட்டத் தரவை அடிப்படையாகக் கொண்டது. வேலை வகை, பருவம் மற்றும் உள்ளூர் தேவைப் பொறுத்து மாறலாம்.*"
+    )
+
+
+def _format_tamil_yield_trend(result: dict) -> str | None:
+    data = (result.get("data") or {}).get("yield_trend_data") or {}
+    trend = data.get("trend") or []
+    if not trend:
+        return None
+    district = _ta(data.get("district") or (result.get("memory") or {}).get("district") or "")
+    crop = _ta(data.get("crop") or (result.get("memory") or {}).get("crop") or "")
+    lines = ["| ஆண்டு | சராசரி மகசூல் (டன்/ஹெக்டேர்) |", "|------|------------------------------|"]
+    for row in trend[-10:]:
+        lines.append(f"| {int(row.get('year'))} | {row.get('avg_yield_t_ha')} |")
+    return (
+        f"### மகசூல் போக்கு - {district} மாவட்டத்தில் {crop}\n\n"
+        f"**சராசரி மகசூல்:** {data.get('avg_yield_t_ha')} டன்/ஹெக்டேர்.\n\n"
+        f"**சிறந்த பதிவு:** {data.get('best_year')} ஆம் ஆண்டில் {data.get('best_yield_t_ha')} டன்/ஹெக்டேர்.\n\n"
+        + "\n".join(lines)
+        + "\n\n*இது வரலாற்று பதிவுகளின் அடிப்படையில் உள்ளது. நடப்பு பருவ மழை, பாசனம் மற்றும் வயல் நிலையை சேர்த்து முடிவு செய்யவும்.*"
+    )
+
+
+def _format_tamil_best_districts(result: dict) -> str | None:
+    data = (result.get("data") or {}).get("best_district_data") or {}
+    rows = data.get("districts") or []
+    if not rows:
+        return None
+    crop = _ta(data.get("crop") or (result.get("memory") or {}).get("crop") or "")
+    lines = ["| வரிசை | மாவட்டம் | சராசரி மகசூல் | சராசரி பரப்பளவு | பருவம் | மண் |", "|------|----------|---------------|----------------|--------|-----|"]
+    for idx, row in enumerate(rows, 1):
+        lines.append(
+            f"| #{idx} | {_ta(row.get('district'))} | {row.get('avg_yield')} டன்/ஹெக்டேர் | {row.get('avg_area_ha', 0):,} ஹெக்டேர் | {_ta(row.get('common_season'))} | {_ta(row.get('common_soil'))} |"
+        )
+    top = rows[0]
+    return (
+        f"### {crop} பயிருக்கு சிறந்த மாவட்டங்கள்\n\n"
+        f"வரலாற்று மகசூல், சாகுபடி பரப்பளவு மற்றும் பதிவுகளின் நிலைத்தன்மை அடிப்படையில் **{_ta(top.get('district'))}** முதல் இடத்தில் உள்ளது.\n\n"
+        + "\n".join(lines)
+        + "\n\n*இறுதி தேர்வில் தற்போதைய நீர் கிடைப்பாடு, சந்தை விலை மற்றும் உள்ளூர் வயல் நிலைமைகளையும் பார்க்கவும்.*"
+    )
+
+
+def _format_tamil_whatif(result: dict) -> str | None:
+    data = (result.get("data") or {}).get("whatif_data") or {}
+    baseline = data.get("baseline") or {}
+    modified = data.get("modified") or {}
+    if not baseline or not modified:
+        return None
+    district = _ta(data.get("district") or (result.get("memory") or {}).get("district") or "")
+    crop = _ta(data.get("crop") or (result.get("memory") or {}).get("crop") or "")
+    changes = data.get("changes_applied") or []
+    changes_ta = _translate_same_template_to_tamil(", ".join(changes)) if changes else "மாற்றம் இல்லை"
+    changes_ta = changes_ta.replace("reduced by", "குறைக்கப்பட்டது").replace("increased by", "அதிகரிக்கப்பட்டது")
+    delta = data.get("delta", 0)
+    irrigation_before = round(float(baseline.get("irrigation_pct", 0)), 1)
+    irrigation_after = round(float(modified.get("irrigation_pct", 0)), 1)
+    return (
+        f"### என்ன ஆகும்? சோதனை - {district} மாவட்டத்தில் {crop}\n\n"
+        f"**சூழ்நிலை:** {changes_ta}\n\n"
+        "| நிலை | மதிப்பெண் | நிலை விளக்கம் |\n"
+        "|------|-----------|---------------|\n"
+        f"| தற்போதைய நிலை | {baseline.get('total_score')}/10 | {_ta(baseline.get('label'))} |\n"
+        f"| மாற்றத்திற்குப் பிறகு | {modified.get('total_score')}/10 | {_ta(modified.get('label'))} |\n"
+        f"| மாற்றம் | {delta} | - |\n\n"
+        f"**நீர் கிடைப்பாடு:** {baseline.get('effective_water_mm')} மில்லிமீட்டர் → {modified.get('effective_water_mm')} மில்லிமீட்டர்.\n\n"
+        f"**பாசன அளவு:** {irrigation_before}% → {irrigation_after}%.\n\n"
+        f"**பரிந்துரை:** மதிப்பெண் குறைந்தால் பாசனம், மண் ஈரப்பதம் மற்றும் பூச்சி கண்காணிப்பை கவனமாக திட்டமிடவும்."
+    )
+
+
+def _translate_same_template_to_tamil(text: str) -> str:
+    """Translate the generated English answer while preserving its Markdown layout."""
+    if not text:
+        return ""
+
+    out = text
+
+    def _ta_named(value: str) -> str:
+        clean = re.sub(r"[*_`]", "", value or "").strip()
+        return _ta(clean) or clean
+
+    regex_map = [
+        (r"What-If Simulation:\s*([A-Za-z ()/-]+) in ([A-Za-z ]+)", lambda m: f"என்ன ஆகும்? சோதனை: {_ta_named(m.group(2))} மாவட்டத்தில் {_ta_named(m.group(1))}"),
+        (r"Suitability Analysis\s*.?\s*([A-Za-z ()/-]+) in ([A-Za-z ]+)", lambda m: f"பொருத்த மதிப்பீடு - {_ta_named(m.group(2))} மாவட்டத்தில் {_ta_named(m.group(1))}"),
+        (r"Best Districts For\s+([A-Za-z ()/-]+)", lambda m: f"{_ta_named(m.group(1))} பயிருக்கு சிறந்த மாவட்டங்கள்"),
+        (r"Vanakkam! I'm your Smart Farming AI for Tamil Nadu\.", "வணக்கம்! நான் தமிழ்நாட்டுக்கான உங்கள் ஸ்மார்ட் வேளாண்மை AI உதவியாளர்."),
+        (r"Based on the agricultural data I have for ([^,]+),", lambda m: f"{_ta_named(m.group(1))} பற்றிய வேளாண்மை தரவைப் பார்க்கும்போது,"),
+        (r"Looking at the historical records for ([^,]+),", lambda m: f"{_ta_named(m.group(1))} மாவட்டத்தின் வரலாற்று பதிவுகளைப் பார்க்கும்போது,"),
+        (r"From what our datasets tell us about ([^,]+),", lambda m: f"{_ta_named(m.group(1))} பற்றிய தரவுகளின் அடிப்படையில்,"),
+        (r"After analysing ([^']+)'s agricultural profile,", lambda m: f"{_ta_named(m.group(1))} வேளாண்மை சுயவிவரத்தை ஆய்வு செய்தபோது,"),
+        (r"The data for ([^ ]+) paints an interesting picture .", lambda m: f"{_ta_named(m.group(1))} பற்றிய தரவு ஒரு முக்கியமான நிலையை காட்டுகிறது."),
+        (r"the rainfall pattern falls in the \*\*([^*]+)\*\* category,\s+averaging \*\*([^*]+)\*\* over the ([^.]+) period\.", lambda m: f"மழை முறை **{m.group(1)}** வகையில் உள்ளது; {m.group(3)} காலத்தில் சராசரியாக **{m.group(2)}** பதிவாகியுள்ளது."),
+        (r"This puts it among the wetter districts of Tamil Nadu, making it well-suited for water-intensive crops like rice and sugarcane\.", "இதனால் இது தமிழ்நாட்டின் அதிக மழை பெறும் மாவட்டங்களில் ஒன்றாகும்; நெல் மற்றும் கரும்பு போன்ற நீர் அதிகம் தேவைப்படும் பயிர்களுக்கு இது பொருத்தமானது."),
+        (r"This is a comfortable range for most Tamil Nadu crops .+?minimal irrigation dependency\.", "இது தமிழ்நாட்டின் பெரும்பாலான பயிர்களுக்கு ஏற்ற மழை அளவு; குறைந்த கூடுதல் பாசனத்துடன் சாகுபடி செய்ய உதவும்."),
+        (r"Farmers here typically rely on irrigation to supplement rain, especially for water-intensive crops like paddy and sugarcane\.", "இங்கு விவசாயிகள் மழைக்கு கூடுதலாக பாசனத்தை நம்புகிறார்கள், குறிப்பாக நெல் மற்றும் கரும்பு போன்ற நீர் அதிகம் தேவைப்படும் பயிர்களுக்கு."),
+        (r"Water management is critical in this district\. Drought-tolerant crops like jowar, bajra, and millets are recommended for rain-fed farming\.", "இந்த மாவட்டத்தில் நீர் மேலாண்மை மிகவும் முக்கியம். மழை சார்ந்த சாகுபடிக்கு சோளம், கம்பு மற்றும் சிறுதானியங்கள் போன்ற வறட்சியை தாங்கும் பயிர்கள் பரிந்துரைக்கப்படுகின்றன."),
+        (r"The \*\*([^*]+)\*\* is the dominant rainy season, contributing \*\*([^*]+)\*\* .+?roughly ([0-9]+)% of the annual total\.", lambda m: f"**{_ta_named(m.group(1))}** முக்கிய மழைக்காலமாக உள்ளது; இது **{m.group(2)}** அளவு மழை தருகிறது, ஆண்டு மொத்தத்தின் சுமார் {m.group(3)}%."),
+        (r"The ([A-Za-z ]+) brings in \*\*([^*]+)\*\*, which is still significant for the post-kharif season crops\.", lambda m: f"{_ta_named(m.group(1))} **{m.group(2)}** அளவு மழை தருகிறது; இது காரிஃப் பிந்தைய பருவப் பயிர்களுக்கு இன்னும் முக்கியமானது."),
+        (r"The ([A-Za-z ]+) brings in \*\*([^*]+)\*\*, which is relatively modest, so post-monsoon crops need supplemental irrigation\.", lambda m: f"{_ta_named(m.group(1))} **{m.group(2)}** அளவு மழை தருகிறது; இது குறைவானது என்பதால் மழைக்காலத்திற்குப் பிறகான பயிர்களுக்கு கூடுதல் பாசனம் தேவை."),
+        (r"The hot weather season \(March.?May\) contributes about \*\*([^*]+)\*\* of pre-monsoon showers, which helps in early Kharif land preparation\.", lambda m: f"வெப்பமான காலமான மார்ச்-மே மாதங்களில் மழைக்காலத்திற்கு முன் சுமார் **{m.group(1)}** மழை கிடைக்கிறது; இது ஆரம்ப காரிஃப் நிலத் தயாரிப்புக்கு உதவும்."),
+        (r"The hot weather season \(March.?May\) contributes about \*\*([^*]+)\*\* of pre-monsoon showers, though this is minimal and farmers should plan for dry spells in spring\.", lambda m: f"வெப்பமான காலமான மார்ச்-மே மாதங்களில் மழைக்காலத்திற்கு முன் சுமார் **{m.group(1)}** மழை கிடைக்கிறது; இது குறைவானதால் விவசாயிகள் வறண்ட இடைவெளிகளுக்குத் திட்டமிட வேண்டும்."),
+        (r"(What's particularly noteworthy is that|Interestingly,|It's also worth mentioning that|On top of that,|Another key insight is that|Digging deeper into the data,) looking at recent years, the rainfall trend appears to be \*\*([^*]+)\*\*\.", lambda m: f"சமீபத்திய ஆண்டுகளைப் பார்க்கும்போது, மழை போக்கு **{m.group(2)}** நிலையில் உள்ளது."),
+        (r"The last three recorded years averaged \*\*([^*]+)\*\*, suggesting improving water availability\.", lambda m: f"கடைசி மூன்று பதிவு செய்யப்பட்ட ஆண்டுகளில் சராசரி **{m.group(1)}**; இது நீர் கிடைப்பில் முன்னேற்றம் இருப்பதை காட்டுகிறது."),
+        (r"The last three recorded years averaged \*\*([^*]+)\*\*, which calls for more careful water conservation planning\.", lambda m: f"கடைசி மூன்று பதிவு செய்யப்பட்ட ஆண்டுகளில் சராசரி **{m.group(1)}**; எனவே நீர் சேமிப்பு திட்டமிடல் மேலும் கவனமாக இருக்க வேண்டும்."),
+        (r"Keep in mind this is based on historical trends up to 2019\.", "இது 2019 வரை உள்ள வரலாற்று போக்குகளின் அடிப்படையில் அமைந்தது என்பதை நினைவில் கொள்ளவும்."),
+        (r"As always, local conditions on the ground can vary\.", "எப்போதும் போல, உள்ளூர் வயல் நிலைமைகள் மாறுபடலாம்."),
+        (r"Note that on-farm conditions, pest pressure, and market prices should also factor into your final decision\.", "வயல் நிலை, பூச்சி அழுத்தம் மற்றும் சந்தை விலையும் இறுதி முடிவில் சேர்த்து பார்க்கப்பட வேண்டும்."),
+        (r"This analysis draws from 20 years of district-level records .+?validate with local agricultural officers\.", "இந்த பகுப்பாய்வு 20 ஆண்டுகளுக்கான மாவட்ட அளவிலான பதிவுகளை அடிப்படையாகக் கொண்டது; உள்ளூர் வேளாண்மை அலுவலர்களுடன் சரிபார்க்கவும்."),
+        (r"when looking at overall crop performance,", "மொத்த பயிர் செயல்திறனைப் பார்க்கும்போது,"),
+        (r"specifically for \*\*([^*]+)\*\* during the \*\*([^*]+)\*\* season,", lambda m: f"குறிப்பாக **{_ta_named(m.group(1))}** மண்ணில் **{_ta_named(m.group(2))}** பருவத்தில்,"),
+        (r"when it comes to \*\*([^*]+)\*\*,", lambda m: f"**{_ta_named(m.group(1))}** மண்ணைப் பார்க்கும்போது,"),
+        (r"focusing on the \*\*([^*]+)\*\* season,", lambda m: f"**{_ta_named(m.group(1))}** பருவத்தைப் பார்க்கும்போது,"),
+        (r"\*\*([^*]+)\*\* stands out as the strongest overall option, combining good historical yield, meaningful cultivation area, and consistent presence in the records\.", lambda m: f"**{_ta_named(m.group(1))}** நல்ல வரலாற்று மகசூல், குறிப்பிடத்தக்க சாகுபடி பரப்பளவு மற்றும் பதிவுகளில் தொடர்ந்து காணப்படுவதால் சிறந்த தேர்வாக உள்ளது."),
+        (r"In ([^,]+), it averages \*\*([^*]+)\*\* on \*\*([^*]+)\*\* during the \*\*([^*]+)\*\* season, with about \*\*([^*]+)\*\* cultivated on average\.", lambda m: f"{_ta_named(m.group(1))} மாவட்டத்தில் இது **{m.group(2)}** சராசரி மகசூல் தருகிறது; **{_ta_named(m.group(3))}** மண்ணில் **{_ta_named(m.group(4))}** பருவத்தில் சராசரியாக **{m.group(5)}** சாகுபடி செய்யப்படுகிறது."),
+        (r"(What's particularly noteworthy is that|Interestingly,|It's also worth mentioning that|On top of that,|Another key insight is that|Digging deeper into the data,) \*\*([^*]+)\*\* is another strong choice, with an average yield of \*\*([^*]+)\*\* and around \*\*([^*]+)\*\* cultivated\.", lambda m: f"**{_ta_named(m.group(2))}** மற்றொரு வலுவான தேர்வு; சராசரி மகசூல் **{m.group(3)}**, சாகுபடி பரப்பளவு சுமார் **{m.group(4)}**."),
+        (r"That makes it a practical alternative for both commercial farming and crop rotation\.", "இதனால் இது வணிக சாகுபடிக்கும் பயிர் சுழற்சிக்கும் பயனுள்ள மாற்று தேர்வாக இருக்கும்."),
+        (r"Other promising crops in this environment include (.+?)\.", lambda m: f"இந்த சூழலில் மற்ற நம்பகமான பயிர்கள்: {m.group(1)}."),
+        (r"From a rainfall standpoint, ([^ ]+) receives an average of \*\*([^*]+)\*\*, with the ([A-Za-z ()/-]+) being the dominant rain source at \*\*([^*]+)\*\*\.", lambda m: f"மழை அடிப்படையில், {_ta_named(m.group(1))} மாவட்டம் சராசரியாக **{m.group(2)}** பெறுகிறது; முக்கிய மழை ஆதாரம் {_ta_named(m.group(3))}, அதன் அளவு **{m.group(4)}**."),
+        (r"Irrigation coverage in ([^ ]+) is \*\*([^*]+)\*\* of net sown area, with \*\*([^*]+)\*\* as the primary water source\.", lambda m: f"{_ta_named(m.group(1))} மாவட்டத்தில் நிகர விதைப்பு பரப்பளவில் **{m.group(2)}** பாசன வசதி உள்ளது; முக்கிய நீர் ஆதாரம் **{_ta_named(m.group(3))}**."),
+        (r"This supports more flexible crop choices\.", "இது பல வகை பயிர் தேர்வுகளுக்கு உதவுகிறது."),
+        (r"So drought-tolerant or rainfall-aligned crops are safer choices\.", "எனவே வறட்சியைத் தாங்கும் அல்லது மழைக்கு ஏற்ற பயிர்கள் பாதுகாப்பான தேர்வுகள்."),
+        (r"Taking everything into account,|Putting it all together,|In summary,|My recommendation, based on all this data, is that|All things considered,", "மொத்தத்தில்,"),
+        (r"if you're farming in ([^,]+), starting with \*\*([^*]+)\*\* and \*\*([^*]+)\*\* would be a sensible data-backed choice\.", lambda m: f"{_ta_named(m.group(1))} மாவட்டத்தில் விவசாயம் செய்தால் **{_ta_named(m.group(2))}** மற்றும் **{_ta_named(m.group(3))}** ஆகியவற்றில் தொடங்குவது தரவு அடிப்படையில் நல்ல தேர்வாகும்."),
+        (r"Final selection should still consider current market price, water availability, and local field conditions\.", "இறுதி தேர்வில் தற்போதைய சந்தை விலை, நீர் கிடைப்பாடு மற்றும் உள்ளூர் வயல் நிலைமைகளையும் கருத்தில் கொள்ள வேண்டும்."),
+        (r"Yield values in the table are normalized to \*\*([^*]+)\*\*\. Coconut nuts are converted at 1\.2 kg/nut; bale crops are converted at 170 kg/bale\.", lambda m: f"அட்டவணையில் உள்ள மகசூல் மதிப்புகள் **{m.group(1)}** ஆக ஒரே அளவுக்கு மாற்றப்பட்டுள்ளன. தென்னை எண்ணிக்கை 1.2 கிலோ/காய் அடிப்படையிலும், பேல் பயிர்கள் 170 கிலோ/பேல் அடிப்படையிலும் மாற்றப்பட்டுள்ளன."),
+        (r"This score combines yield performance, rainfall alignment, soil compatibility, irrigation coverage, and historical presence\.", "இந்த மதிப்பெண் மகசூல் செயல்திறன், மழை பொருத்தம், மண் பொருத்தம், பாசன வசதி மற்றும் வரலாற்று பதிவுகளை இணைத்து கணக்கிடப்படுகிறது."),
+        (r"\*\*Water Analysis:\*\* District receives \*\*([^*]+)\*\* per year versus crop need of \*\*([^*]+)\*\* . well-covered by rainfall\.", lambda m: f"**நீர் பகுப்பாய்வு:** மாவட்டம் ஆண்டுக்கு **{m.group(1)}** பெறுகிறது; பயிரின் தேவை **{m.group(2)}**. மழை மூலம் நன்றாகப் பூர்த்தியாகிறது."),
+        (r"\*\*Water Analysis:\*\* District receives \*\*([^*]+)\*\* per year versus crop need of \*\*([^*]+)\*\* . a deficit of \*\*([^*]+)\*\* means irrigation support is important\.", lambda m: f"**நீர் பகுப்பாய்வு:** மாவட்டம் ஆண்டுக்கு **{m.group(1)}** பெறுகிறது; பயிரின் தேவை **{m.group(2)}**. **{m.group(3)}** பற்றாக்குறை இருப்பதால் பாசன உதவி முக்கியம்."),
+        (r"\*\*Season considered:\*\* All seasons\.", "**கருதப்பட்ட பருவம்:** அனைத்து பருவங்களும்."),
+        (r"\*\*Irrigation coverage used in scoring:\*\* ([^.]+)\.", lambda m: f"**மதிப்பீட்டில் பயன்படுத்திய பாசன வசதி:** {m.group(1)}."),
+        (r"Try a scenario test next: \*\"What if irrigation improved in ([^ ]+) for ([^\"]+)\"\*", lambda m: f"அடுத்ததாக ஒரு சூழ்நிலை சோதனை முயற்சிக்கவும்: *\"{_ta_named(m.group(1))} மாவட்டத்தில் {_ta_named(m.group(2))} பயிருக்கு பாசனம் மேம்பட்டால் என்ன ஆகும்?\"*"),
+        (r"\*\*Water Analysis:\*\* District receives \*\*([^*]+)\*\* annually versus crop need of \*\*([^*]+)\*\* .+? well-covered by rainfall\.", lambda m: f"**நீர் பகுப்பாய்வு:** மாவட்டம் ஆண்டுக்கு **{m.group(1)}** பெறுகிறது; பயிரின் தேவை **{m.group(2)}**. மழை மூலம் நன்றாக பூர்த்தியாகிறது."),
+        (r"\*\*Water Analysis:\*\* District receives \*\*([^*]+)\*\* annually versus crop need of \*\*([^*]+)\*\* .+? a deficit of \*\*([^*]+)\*\* means irrigation support is important\.", lambda m: f"**நீர் பகுப்பாய்வு:** மாவட்டம் ஆண்டுக்கு **{m.group(1)}** பெறுகிறது; பயிரின் தேவை **{m.group(2)}**. **{m.group(3)}** பற்றாக்குறை இருப்பதால் பாசன உதவி முக்கியம்."),
+        (r"Use nitrogen in split doses, with phosphorus and potash applied near planting based on soil test results\.", "நைட்ரஜனைப் பிரிக்கப்பட்ட அளவுகளில் இடவும்; மண் பரிசோதனை முடிவின் அடிப்படையில் நடவு நேரத்தில் பாஸ்பரஸ் மற்றும் பொட்டாஷ் இடவும்."),
+        (r"Farmyard manure, green manure, or compost before transplanting improves soil structure and nutrient holding\.", "நடவு முன் தொழு உரம், பச்சை உரம் அல்லது கம்போஸ்ட் இடுவது மண் அமைப்பையும் சத்துத் தாங்கும் திறனையும் மேம்படுத்தும்."),
+        (r"Avoid heavy nitrogen application when rainfall is intense or drainage is poor\.", "மழை அதிகமாக இருக்கும்போது அல்லது வடிகால் பலவீனமாக இருக்கும்போது அதிக நைட்ரஜன் இடுவதைத் தவிர்க்கவும்."),
+        (r"Estimated fertilizer input cost is roughly \*\*([^*]+)\*\*, depending on current input prices and soil condition\.", lambda m: f"தற்போதைய உள்ளீட்டு விலை மற்றும் மண் நிலைக்கு ஏற்ப உர செலவு சுமார் **{m.group(1)}** ஆகும்."),
+        (r"Use this as planning guidance only\. A local soil test is still the best way to decide exact fertilizer quantity\.", "இதை திட்டமிடும் வழிகாட்டுதலாக மட்டும் பயன்படுத்தவும். சரியான உர அளவைத் தீர்மானிக்க உள்ளூர் மண் பரிசோதனையே சிறந்த வழி."),
+        (r"Let me give you a pest risk assessment for \*\*([^*]+)\*\* based on its historical rainfall and climate profile\.", lambda m: f"**{_ta_named(m.group(1))}** மாவட்டத்தின் வரலாற்று மழை மற்றும் காலநிலை அடிப்படையில் பூச்சி அபாய மதிப்பீடு இதோ."),
+        (r"The district receives about \*\*([^*]+)\*\*, with the Southwest Monsoon contributing \*\*([^*]+)\*\* and the Northeast Monsoon \*\*([^*]+)\*\*\.", lambda m: f"மாவட்டம் சுமார் **{m.group(1)}** மழை பெறுகிறது; தென்மேற்கு பருவமழை **{m.group(2)}**, வடகிழக்கு பருவமழை **{m.group(3)}** அளவு பங்களிக்கின்றன."),
+        (r"High monsoon intensity creates humid conditions that are particularly favourable for fungal diseases and certain insect pests\.", "அதிக பருவமழை ஈரமான சூழலை உருவாக்குகிறது; இது பூஞ்சை நோய்கள் மற்றும் சில பூச்சிகளுக்கு சாதகமாக இருக்கும்."),
+        (r"The moderate rainfall pattern limits some moisture-dependent pests, though dry spells can trigger a different set of risks\.", "மிதமான மழை சில ஈரப்பதம் சார்ந்த பூச்சிகளை கட்டுப்படுத்தினாலும், வறண்ட இடைவெளிகள் வேறு அபாயங்களை உருவாக்கலாம்."),
+        (r"(What's particularly noteworthy is that|Interestingly,|It's also worth mentioning that|On top of that,|Another key insight is that|Digging deeper into the data,) Tamil Nadu's statewide rainfall deviation for this district's period is \*\*([^*]+)\*\* from normal\.", lambda m: f"இந்த மாவட்டத்தின் காலப்பகுதியில் தமிழ்நாடு மாநில மழை இயல்பை விட **{m.group(2)}** மாறுபட்டுள்ளது."),
+        (r"A positive deviation means surplus water .+? watch for waterlogging and fungal outbreaks\.", "நேர்மறை மாறுபாடு கூடுதல் நீரை குறிக்கிறது; நீர் தேக்கம் மற்றும் பூஞ்சை நோய் பரவலை கவனிக்கவும்."),
+        (r"A negative deviation indicates drier than normal conditions .+? water stress in crops can make them more vulnerable to sucking pests\.", "எதிர்மறை மாறுபாடு இயல்பை விட வறண்ட நிலையை குறிக்கிறது; நீர் அழுத்தம் பயிர்களை சாறு உறிஞ்சும் பூச்சிகளுக்கு எளிதாக பாதிக்கக்கூடும்."),
+        (r"Rainfall is near normal levels, so standard seasonal pest management should suffice\.", "மழை இயல்பான அளவுக்கு அருகில் உள்ளது; வழக்கமான பருவகால பூச்சி மேலாண்மை போதுமானதாக இருக்கும்."),
+        (r"\*\*General advisory for Tamil Nadu:\*\* Integrate pest management \(IPM\) is always recommended .+? extremely useful\.", "**தமிழ்நாட்டுக்கான பொது ஆலோசனை:** ஒருங்கிணைந்த பூச்சி மேலாண்மை (IPM) எப்போதும் பரிந்துரைக்கப்படுகிறது. உயிரியல் கட்டுப்பாடு, நோய் எதிர்ப்பு வகைகள் மற்றும் அவசியமானபோது மட்டும் ரசாயன மருந்துகளை பயன்படுத்துவது நல்லது. மாவட்ட வாரியான பூச்சி காலண்டர்களையும் பார்க்கவும்."),
+        (r"Crops most at risk: \*\*([^*]+)\*\*\.", lambda m: f"அதிக அபாயத்தில் உள்ள பயிர்கள்: **{m.group(1)}**."),
+        (r"Recommended action:", "பரிந்துரைக்கப்படும் நடவடிக்கை:"),
+        (r"Let me give you a comprehensive agricultural snapshot of \*\*([^*]+)\*\*\.", lambda m: f"**{_ta_named(m.group(1))}** மாவட்டத்தின் முழுமையான வேளாண்மை சுருக்கம் இதோ."),
+        (r"\*\*([^*]+)\*\* covers a total geographical area of \*\*([^*]+)\*\*, with \*\*([^*]+)\*\* under active cultivation\.", lambda m: f"**{_ta_named(m.group(1))}** மாவட்டத்தின் மொத்த புவியியல் பரப்பளவு **{m.group(2)}**; இதில் **{m.group(3)}** செயலில் உள்ள சாகுபடி பரப்பளவு."),
+        (r"Of this, \*\*([^*]+)\*\* has irrigation access . giving us a broad picture of the district's farming intensity\.", lambda m: f"இதில் **{m.group(1)}** பாசன வசதி கொண்டது; இது மாவட்டத்தின் சாகுபடி தீவிரத்தை காட்டுகிறது."),
+        (r"The (?:main|dominant) soil type is \*\*([^*]+)\*\*, which shapes the crop selection significantly\.", lambda m: f"முக்கிய மண் வகை **{_ta_named(m.group(1))}**; இது பயிர் தேர்வில் பெரிய தாக்கம் செலுத்துகிறது."),
+        (r"Alluvial soils are extremely fertile and support a wide range of crops . from rice and sugarcane to banana and vegetables\.", "வண்டல் மண் மிகவும் வளமானது; நெல், கரும்பு, வாழை மற்றும் காய்கறிகள் உள்ளிட்ட பல பயிர்களுக்கு ஏற்றது."),
+        (r"Based on \*\*([^*]+)\*\* of records, the highest-yielding crops in ([^ ]+) are (.+?)\.", lambda m: f"**{m.group(1)}** பதிவுகளின் அடிப்படையில், {_ta_named(m.group(2))} மாவட்டத்தில் அதிக மகசூல் தரும் பயிர்கள் {m.group(3)}."),
+        (r"These crops have consistently outperformed in yield and area coverage\.", "இந்த பயிர்கள் மகசூல் மற்றும் பரப்பளவு அடிப்படையில் தொடர்ந்து சிறப்பாக செயல்பட்டுள்ளன."),
+        (r"The \*\*([^*]+)\*\* season dominates agriculture here in terms of number of crop entries, reflecting the agroclimate's natural alignment with year-round cultivation\.", lambda m: f"**{_ta_named(m.group(1))}** பருவம் பயிர் பதிவுகளின் எண்ணிக்கையில் அதிகமாக உள்ளது; இது ஆண்டு முழுவதும் சாகுபடிக்கு உள்ளூர் காலநிலை ஏற்றதாக இருப்பதை காட்டுகிறது."),
+        (r"The \*\*([^*]+)\*\* season dominates agriculture here in terms of number of crop entries, reflecting the agroclimate's natural alignment with the SW monsoon\.", lambda m: f"**{_ta_named(m.group(1))}** பருவம் பயிர் பதிவுகளின் எண்ணிக்கையில் அதிகமாக உள்ளது; இது தென்மேற்கு பருவமழைக்கு உள்ளூர் காலநிலை ஏற்றதாக இருப்பதை காட்டுகிறது."),
+        (r"The \*\*([^*]+)\*\* season dominates agriculture here in terms of number of crop entries, reflecting the agroclimate's natural alignment with the NE monsoon and winter cultivation patterns\.", lambda m: f"**{_ta_named(m.group(1))}** பருவம் பயிர் பதிவுகளின் எண்ணிக்கையில் அதிகமாக உள்ளது; இது வடகிழக்கு பருவமழை மற்றும் குளிர்கால சாகுபடிக்கு உள்ளூர் காலநிலை ஏற்றதாக இருப்பதை காட்டுகிறது."),
+        (r"Rainfall averages \*\*([^*]+)\*\* .+? ample for water-intensive crops\.", lambda m: f"மழை சராசரி **{m.group(1)}**; நீர் அதிகம் தேவைப்படும் பயிர்களுக்கு இது போதுமானது."),
+        (r"Rainfall averages \*\*([^*]+)\*\* .+? sufficient for most crops with proper water management\.", lambda m: f"மழை சராசரி **{m.group(1)}**; சரியான நீர் மேலாண்மையுடன் பெரும்பாலான பயிர்களுக்கு இது போதுமானது."),
+        (r"Rainfall averages \*\*([^*]+)\*\* .+? on the lower side, making irrigation and water harvesting critical\.", lambda m: f"மழை சராசரி **{m.group(1)}**; இது குறைவானதால் பாசனமும் நீர் சேகரிப்பும் மிகவும் முக்கியம்."),
+        (r"([^ ]+) is an agriculturally rich district with strong yield potential across multiple crop categories\.", lambda m: f"{_ta_named(m.group(1))} வேளாண்மையில் வளமான மாவட்டம்; பல பயிர் வகைகளில் நல்ல மகசூல் திறன் உள்ளது."),
+        (r"([^ ]+) is a productive agricultural district with specific strengths in certain crop types\.", lambda m: f"{_ta_named(m.group(1))} உற்பத்தி திறன் கொண்ட வேளாண்மை மாவட்டம்; சில பயிர் வகைகளில் குறிப்பிட்ட பலம் உள்ளது."),
+        (r"For detailed farm planning, I'd recommend following up with rainfall queries, irrigation profiles, and specific crop recommendations using the options available\.", "விரிவான பண்ணை திட்டமிடலுக்கு, மழை தகவல், பாசன விவரம் மற்றும் குறிப்பிட்ட பயிர் பரிந்துரைகளை தொடர்ந்து பார்க்கலாம்."),
+        (r"([^ ]+) has \*\*excellent irrigation infrastructure\*\*, with \*\*([^*]+)\*\* being irrigated\.", lambda m: f"{_ta_named(m.group(1))} மாவட்டத்தில் **மிகச் சிறந்த பாசன வசதி** உள்ளது; **{m.group(2)}** பாசன வசதி கொண்டது."),
+        (r"([^ ]+) has \*\*moderate irrigation coverage\*\*, with \*\*([^*]+)\*\* being irrigated\.", lambda m: f"{_ta_named(m.group(1))} மாவட்டத்தில் **மிதமான பாசன வசதி** உள்ளது; **{m.group(2)}** பாசன வசதி கொண்டது."),
+        (r"([^ ]+) has \*\*limited irrigation coverage\*\*, with \*\*([^*]+)\*\* being irrigated\.", lambda m: f"{_ta_named(m.group(1))} மாவட்டத்தில் **குறைந்த பாசன வசதி** உள்ளது; **{m.group(2)}** பாசன வசதி கொண்டது."),
+        (r"Out of ([^,]+) under cultivation, ([^.]+) have assured irrigation access\.", lambda m: f"சாகுபடியில் உள்ள {m.group(1)} பரப்பளவில், {m.group(2)} உறுதியான பாசன வசதி கொண்டது."),
+        (r"This district has very good water access and can support intensive double or triple cropping systems\.", "இந்த மாவட்டத்தில் நீர் கிடைப்பாடு நல்லது; தீவிர இரட்டை அல்லது மும்மை பயிரிடல் முறைகளை ஆதரிக்க முடியும்."),
+        (r"The primary water source is \*\*([^*]+)\*\* \(([^)]+)\), which is typical for districts with strong canal network from major rivers\.", lambda m: f"முக்கிய நீர் ஆதாரம் **{_ta_named(m.group(1))}** ({m.group(2)}); பெரிய ஆறுகளின் கால்வாய் வலையமைப்பு உள்ள மாவட்டங்களில் இது பொதுவானது."),
+        (r"Other sources include (.+?) . reflecting a diversified water access strategy\.", lambda m: f"மற்ற நீர் ஆதாரங்கள்: {m.group(1)}. இது பலவகை நீர் அணுகல் முறையை காட்டுகிறது."),
+        (r"Groundwater depth averages \*\*([^*]+)\*\* across the year, indicating deep groundwater levels warranting conservation efforts\.", lambda m: f"ஆண்டு முழுவதும் நிலத்தடி நீர் ஆழம் சராசரியாக **{m.group(1)}**; ஆழமான நிலத்தடி நீரால் நீர் பாதுகாப்பு முயற்சிகள் அவசியம்."),
+        (r"Depth of this level increases pumping costs . efficient irrigation methods like drip are increasingly important\.", "இந்த அளவிலான ஆழம் பம்பிங் செலவை அதிகரிக்கும்; சொட்டு பாசனம் போன்ற திறமையான முறைகள் மிகவும் முக்கியம்."),
+    ]
+    for pattern, replacement in regex_map:
+        out = re.sub(pattern, replacement, out, flags=re.I | re.S)
+
+    phrase_map = {
+        "What-If Simulation": "என்ன ஆகும்? சோதனை",
+        "Scenario Inputs": "சூழ்நிலை உள்ளீடுகள்",
+        "Expected Result": "எதிர்பார்க்கப்படும் முடிவு",
+        "Why This Happens": "இது ஏன் நடக்கிறது",
+        "Recommended Action": "பரிந்துரைக்கப்படும் நடவடிக்கை",
+        "Crop Recommendations": "பயிர் பரிந்துரைகள்",
+        "Crop Recommendation": "பயிர் பரிந்துரை",
+        "Rainfall Summary": "மழை சுருக்கம்",
+        "Rainfall Information": "மழை தகவல்",
+        "Pest Risk": "பூச்சி அபாயம்",
+        "Fertilizer Recommendation": "உர பரிந்துரை",
+        "Irrigation Information": "பாசன தகவல்",
+        "District Overview": "மாவட்ட சுருக்கம்",
+        "Yield Prediction": "மகசூல் கணிப்பு",
+        "Yield Trend": "மகசூல் போக்கு",
+        "Suitability Score": "பொருத்த மதிப்பெண்",
+        "Planting Time": "நடவு காலம்",
+        "Best Districts": "சிறந்த மாவட்டங்கள்",
+        "Best Crops": "சிறந்த பயிர்கள்",
+        "Active Context": "செயலில் உள்ள சூழல்",
+        "Total cost": "மொத்த செலவு",
+        "Expected yield impact": "எதிர்பார்க்கப்படும் மகசூல் தாக்கம்",
+        "Pest risk change": "பூச்சி அபாய மாற்றம்",
+        "rainfall change": "மழை மாற்றம்",
+        "irrigation change": "பாசன மாற்றம்",
+        "fertilizer change": "உர மாற்றம்",
+        "temperature change": "வெப்பநிலை மாற்றம்",
+        "pest intensity": "பூச்சி தீவிரம்",
+        "soil moisture": "மண் ஈரப்பதம்",
+        "market price": "சந்தை விலை",
+        "cultivation cost": "சாகுபடி செலவு",
+        "historical records": "வரலாற்று பதிவுகள்",
+        "local conditions": "உள்ளூர் நிலைமைகள்",
+        "Annual Rainfall": "ஆண்டு மழை",
+        "Avg Yield": "சராசரி மகசூல்",
+        "Avg Area": "சராசரி பரப்பளவு",
+        "Common Season": "பொதுவான பருவம்",
+        "Common Soil": "பொதுவான மண்",
+        "Southwest Monsoon": "தென்மேற்கு பருவமழை",
+        "Northeast Monsoon": "வடகிழக்கு பருவமழை",
+        "very high rainfall": "மிக அதிக மழை",
+        "moderate to high rainfall": "மிதமான முதல் அதிக மழை",
+        "moderate rainfall": "மிதமான மழை",
+        "relatively low rainfall": "குறைந்த மழை",
+        "per year": "ஆண்டுக்கு",
+        "annually": "ஆண்டுக்கு",
+        "soil test": "மண் பரிசோதனை",
+        "field monitoring": "வயல் கண்காணிப்பு",
+        "integrated pest management": "ஒருங்கிணைந்த பூச்சி மேலாண்மை",
+        "Yield may": "மகசூல்",
+        "Pest pressure may": "பூச்சி அழுத்தம்",
+        "under this scenario": "இந்த சூழ்நிலையில்",
+        "stay nearly stable": "கிட்டத்தட்ட நிலையாக இருக்கும்",
+        "Water availability is shaped by rainfall and irrigation together.": "நீர் கிடைப்பை மழையும் பாசனமும் சேர்ந்து நிர்ணயிக்கின்றன.",
+        "Fertilizer helps only when moisture and pest pressure are manageable.": "ஈரப்பதமும் பூச்சி அழுத்தமும் கட்டுப்பாட்டில் இருந்தால் மட்டுமே உரம் நல்ல பலன் தரும்.",
+        "Temperature stress and high pest intensity reduce the likely yield benefit.": "வெப்பநிலை அழுத்தமும் அதிக பூச்சி தீவிரமும் மகசூல் பலனை குறைக்கலாம்.",
+        "Soil moisture around the middle range is usually safer than very dry or waterlogged conditions.": "மிக வறண்ட அல்லது நீர் தேங்கிய நிலையை விட நடுத்தர மண் ஈரப்பதம் பொதுவாக பாதுகாப்பானது.",
+        "High pest pressure: inspect leaves twice weekly and avoid unnecessary irrigation.": "பூச்சி அழுத்தம் அதிகம்: வாரத்திற்கு இரண்டு முறை இலைகளைச் சரிபார்த்து தேவையற்ற பாசனத்தைத் தவிர்க்கவும்.",
+        "Yield may drop: rebalance water, reduce stress, and consider staged fertilizer support.": "மகசூல் குறையலாம்: நீரை சமநிலைப்படுத்தி, அழுத்தத்தை குறைத்து, கட்டுப்படுத்தப்பட்ட கட்டங்களாக உரம் இடவும்.",
+        "Scenario looks favorable: keep monitoring moisture and avoid over-fertilizing.": "சூழ்நிலை சாதகமாக உள்ளது: ஈரப்பதத்தை தொடர்ந்து கண்காணித்து அதிக உரமிடுவதைத் தவிர்க்கவும்.",
+        "Scenario is stable: maintain current plan and monitor rainfall/pest signs.": "சூழ்நிலை நிலையாக உள்ளது: தற்போதைய திட்டத்தைத் தொடர்ந்தும் மழை மற்றும் பூச்சி அறிகுறிகளை கண்காணிக்கவும்.",
+    }
+    phrase_map.update({
+        "Soil Analysis Result": "மண் பகுப்பாய்வு முடிவு",
+        "Detected soil type": "கண்டறியப்பட்ட மண் வகை",
+        "Characteristics": "பண்புகள்",
+        "Best matching crops": "பொருத்தமான சிறந்த பயிர்கள்",
+        "Typical characteristics for this soil type": "இந்த மண் வகைக்கான பொதுவான பண்புகள்",
+        "I'll remember this soil type for the rest of this chat.": "இந்த உரையாடலின் மீதம் இந்த மண் வகையை நினைவில் வைத்துக் கொள்கிறேன்.",
+        "Suitability Analysis": "பொருத்த மதிப்பீடு",
+        "Factor": "காரணி",
+        "Max": "அதிகபட்சம்",
+        "TOTAL": "மொத்தம்",
+        "Yield Performance": "மகசூல் செயல்திறன்",
+        "Rainfall Alignment": "மழை பொருத்தம்",
+        "Soil Compatibility": "மண் பொருத்தம்",
+        "Irrigation Coverage": "பாசன வசதி",
+        "Historical Presence": "வரலாற்று இருப்பு",
+        "Water Analysis": "நீர் பகுப்பாய்வு",
+        "Organic support": "இயற்கை உர ஆதரவு",
+        "Important caution": "முக்கிய எச்சரிக்கை",
+        "Irrigation Source": "பாசன ஆதாரம்",
+        "Area Irrigated": "பாசன பரப்பளவு",
+        "Canals": "கால்வாய்கள்",
+        "Tube/Bore Wells": "குழாய்/போர் கிணறுகள்",
+        "Open Wells": "திறந்த கிணறுகள்",
+        "Other Sources": "மற்ற ஆதாரங்கள்",
+        "All seasons": "அனைத்து பருவங்களும்",
+        "Alluvial soils": "வண்டல் மண்",
+        "net sown area": "நிகர விதைப்பு பரப்பளவு",
+        "water-intensive": "நீர் அதிகம் தேவைப்படும்",
+        "Very Good": "மிக நல்லது",
+        "Below Average": "சராசரிக்கு கீழ்",
+        "Excellent": "மிகச் சிறந்தது",
+        "Moderate": "மிதமானது",
+        "Poor": "பலவீனமானது",
+        "per acre": "ஏக்கருக்கு",
+        "Apply propiconazole fungicide; drain excess water; use resistant varieties.": "ப்ரோபிகோனசோல் பூஞ்சைக்கொல்லி பயன்படுத்தவும்; அதிக நீரை வடிகட்டவும்; நோய் எதிர்ப்பு வகைகளை பயன்படுத்தவும்.",
+        "Ensure proper field drainage; apply mancozeb; monitor regularly in Oct-Dec.": "வயலில் நல்ல வடிகால் ஏற்பாடு செய்யவும்; மான்கோசெப் பயன்படுத்தவும்; அக்டோபர் முதல் டிசம்பர் வரை அடிக்கடி கண்காணிக்கவும்.",
+        "Ensure proper field drainage; apply mancozeb; monitor regularly in Oct–Dec.": "வயலில் நல்ல வடிகால் ஏற்பாடு செய்யவும்; மான்கோசெப் பயன்படுத்தவும்; அக்டோபர் முதல் டிசம்பர் வரை அடிக்கடி கண்காணிக்கவும்.",
+        "Spray neem oil or imidacloprid; maintain adequate soil moisture.": "வேப்பெண்ணெய் அல்லது இமிடாக்ளோபிரிட் தெளிக்கவும்; மண்ணில் போதுமான ஈரப்பதத்தை பராமரிக்கவும்.",
+        "Install yellow sticky traps; use spinosad insecticide; irrigate frequently.": "மஞ்சள் ஒட்டும் வலைகளை அமைக்கவும்; ஸ்பைனோசாட் பூச்சிக்கொல்லி பயன்படுத்தவும்; அடிக்கடி பாசனம் செய்யவும்.",
+        "Routine monitoring and preventive neem sprays recommended.": "தொடர்ந்து கண்காணிக்கவும்; முன்னெச்சரிக்கையாக வேப்பெண்ணெய் தெளிக்கவும்.",
+    })
+    for english, tamil in sorted(phrase_map.items(), key=lambda item: len(item[0]), reverse=True):
+        out = re.sub(re.escape(english), tamil, out, flags=re.I)
+
+    word_map = {
+        "district": "மாவட்டம்",
+        "crop": "பயிர்",
+        "crops": "பயிர்கள்",
+        "soil": "மண்",
+        "season": "பருவம்",
+        "month": "மாதம்",
+        "rainfall": "மழை",
+        "rain": "மழை",
+        "irrigation": "பாசனம்",
+        "fertilizer": "உரம்",
+        "temperature": "வெப்பநிலை",
+        "moisture": "ஈரப்பதம்",
+        "yield": "மகசூல்",
+        "profit": "லாபம்",
+        "revenue": "வருவாய்",
+        "cost": "செலவு",
+        "risk": "அபாயம்",
+        "pest": "பூச்சி",
+        "pests": "பூச்சிகள்",
+        "disease": "நோய்",
+        "action": "நடவடிக்கை",
+        "recommendation": "பரிந்துரை",
+        "recommended": "பரிந்துரைக்கப்படும்",
+        "suitable": "பொருத்தமான",
+        "high": "அதிகம்",
+        "medium": "மிதமான",
+        "moderate": "மிதமான",
+        "low": "குறைவு",
+        "increase": "அதிகரிப்பு",
+        "decrease": "குறைவு",
+        "stable": "நிலையான",
+        "good": "நல்ல",
+        "poor": "பலவீனமான",
+        "excellent": "மிகச் சிறந்த",
+        "apply": "பயன்படுத்தவும்",
+        "monitor": "கண்காணிக்கவும்",
+        "avoid": "தவிர்க்கவும்",
+        "use": "பயன்படுத்தவும்",
+        "because": "ஏனெனில்",
+        "and": "மற்றும்",
+        "or": "அல்லது",
+        "for": "க்கான",
+        "in": "இல்",
+        "with": "உடன்",
+        "next": "அடுத்த",
+        "days": "நாட்கள்",
+        "hours": "மணிநேரங்கள்",
+        "current": "தற்போதைய",
+        "expected": "எதிர்பார்க்கப்படும்",
+        "change": "மாற்றம்",
+        "scenario": "சூழ்நிலை",
+        "input": "உள்ளீடு",
+        "result": "முடிவு",
+        "happens": "நடக்கிறது",
+        "pressure": "அழுத்தம்",
+        "benefit": "பலன்",
+        "impact": "தாக்கம்",
+        "score": "மதிப்பெண்",
+        "data": "தரவு",
+        "records": "பதிவுகள்",
+        "year": "ஆண்டு",
+        "years": "ஆண்டுகள்",
+        "period": "காலம்",
+        "trend": "போக்கு",
+        "increasing": "அதிகரிக்கும்",
+        "declining": "குறைந்து வரும்",
+        "normal": "சாதாரண",
+        "dominant": "முக்கிய",
+        "significant": "முக்கியமான",
+        "minimal": "குறைந்த",
+        "supplemental": "கூடுதல்",
+        "preparation": "தயாரிப்பு",
+        "area": "பரப்பளவு",
+        "acres": "ஏக்கர்",
+        "price": "விலை",
+        "labor": "கூலி",
+        "water": "நீர்",
+        "summer": "கோடை",
+        "winter": "குளிர்காலம்",
+        "kharif": "காரிஃப்",
+        "rabi": "ரபி",
+    }
+    word_map.update({
+        "year": "ஆண்டு",
+        "years": "ஆண்டுகள்",
+        "hectares": "ஹெக்டேர்",
+        "hectare": "ஹெக்டேர்",
+        "tonnes": "டன்",
+        "tonne": "டன்",
+        "performance": "செயல்திறன்",
+        "alignment": "பொருத்தம்",
+        "compatibility": "பொருத்தம்",
+        "coverage": "வசதி",
+        "presence": "இருப்பு",
+        "analysis": "பகுப்பாய்வு",
+        "considered": "கருதப்பட்டது",
+        "infrastructure": "வசதி",
+        "primary": "முக்கிய",
+        "source": "ஆதாரம்",
+        "sources": "ஆதாரங்கள்",
+        "cultivation": "சாகுபடி",
+        "cultivated": "சாகுபடி செய்யப்பட்டது",
+        "commercial": "வணிக",
+        "rotation": "சுழற்சி",
+        "planning": "திட்டமிடல்",
+        "guidance": "வழிகாட்டுதல்",
+        "quantity": "அளவு",
+        "nitrogen": "நைட்ரஜன்",
+        "phosphorus": "பாஸ்பரஸ்",
+        "potash": "பொட்டாஷ்",
+        "compost": "கம்போஸ்ட்",
+        "drainage": "வடிகால்",
+        "fungal": "பூஞ்சை",
+        "diseases": "நோய்கள்",
+        "insect": "பூச்சி",
+        "climate": "காலநிலை",
+        "profile": "சுயவிவரம்",
+        "assessment": "மதிப்பீடு",
+        "favourable": "சாதகமான",
+        "favorable": "சாதகமான",
+        "support": "ஆதரவு",
+        "intensive": "தீவிர",
+        "double": "இரட்டை",
+        "triple": "மும்மை",
+        "systems": "முறைகள்",
+        "groundwater": "நிலத்தடி நீர்",
+        "depth": "ஆழம்",
+        "averages": "சராசரியாக உள்ளது",
+        "metres": "மீட்டர்",
+        "conservation": "பாதுகாப்பு",
+        "efforts": "முயற்சிகள்",
+        "pumping": "பம்பிங்",
+        "efficient": "திறமையான",
+        "methods": "முறைகள்",
+        "drip": "சொட்டு பாசனம்",
+        "vegetables": "காய்கறிகள்",
+        "sweet": "சர்க்கரை",
+    })
+    for english, tamil in sorted(word_map.items(), key=lambda item: len(item[0]), reverse=True):
+        out = re.sub(rf"\b{re.escape(english)}\b", tamil, out, flags=re.I)
+
+    value_map = {}
+    for value in list(KNOWN_CROPS) + list(CROP_ALIASES.keys()) + list(SOIL_KEYWORDS.keys()) + list(SEASON_KEYWORDS.keys()):
+        value_map[value] = _ta(value)
+    pest_names = [
+        "Rice Blast (Magnaporthe oryzae)", "Brown Plant Hopper", "Stem Borer",
+        "Sheath Blight", "Leaf Folder", "Fungal Leaf Spot", "Aphids", "Whitefly",
+        "Red Spider Mite", "Thrips", "Leaf Miners", "Pod Borers",
+        "General garden pests (minor)",
+    ]
+    for pest_name in pest_names:
+        value_map[pest_name] = _ta_pests([pest_name])
+    try:
+        for district in getattr(de, "ALL_DISTRICTS", []) or []:
+            value_map[str(district)] = _ta(str(district))
+    except Exception:
+        pass
+
+    for english, tamil in sorted(value_map.items(), key=lambda item: len(item[0]), reverse=True):
+        if english and tamil and english.lower() != tamil.lower():
+            out = re.sub(rf"\b{re.escape(english)}\b", tamil, out, flags=re.I)
+
+    out = re.sub(r"\btonnes?/ha\b", "டன்/ஹெக்டேர்", out, flags=re.I)
+    out = re.sub(r"\btons?/ha\b", "டன்/ஹெக்டேர்", out, flags=re.I)
+    out = re.sub(r"\bt/ha\b", "டன்/ஹெக்டேர்", out, flags=re.I)
+    out = re.sub(r"\bkg/ha\b", "கிலோ/ஹெக்டேர்", out, flags=re.I)
+    out = re.sub(r"\bha\b", "ஹெக்டேர்", out, flags=re.I)
+    out = re.sub(r"\bmm\b", "மில்லிமீட்டர்", out, flags=re.I)
+    out = re.sub(r"\bkm/h\b", "கி.மீ/மணி", out, flags=re.I)
+    out = out.replace("₹", "ரூ.")
+    out = out.replace("Rs.", "ரூ.")
+    cleanup_map = {
+        "receives": "பெறுகிறது",
+        "versus": "ஒப்பிடும்போது",
+        "need of": "தேவை",
+        "well-covered by": "நன்றாக பூர்த்தியாகிறது",
+        "of the": "இன்",
+        "being irrigated": "பாசன வசதி கொண்டது",
+        "under cultivation": "சாகுபடியில்",
+        "have assured": "உறுதியான",
+        "has irrigation access": "பாசன வசதி உள்ளது",
+        "input prices": "உள்ளீட்டு விலைகள்",
+        "soil condition": "மண் நிலை",
+        "current": "தற்போதைய",
+        "Alluvial மண்": "வண்டல் மண்",
+        "Black மண்": "கருப்பு மண்",
+        "Red மண்": "சிவப்பு மண்",
+        "Clay மண்": "களிமண்",
+        "நெல் Blast": "நெல் பிளாஸ்ட் நோய்",
+        "Blast": "பிளாஸ்ட் நோய்",
+        "Brown Plant Hopper": "பழுப்பு தத்துப்பூச்சி",
+        "Plant Hopper": "தத்துப்பூச்சி",
+        "fungicide": "பூஞ்சைக்கொல்லி",
+        "resistant varieties": "நோய் எதிர்ப்பு வகைகள்",
+        "access": "வசதி",
+        "Whole ஆண்டு": "முழு ஆண்டு",
+        "Rank": "வரிசை",
+        "Sweet Potato": "சர்க்கரைவள்ளி கிழங்கு",
+        "Potato": "உருளைக்கிழங்கு",
+    }
+    for english, tamil in sorted(cleanup_map.items(), key=lambda item: len(item[0]), reverse=True):
+        out = re.sub(re.escape(english), tamil, out, flags=re.I)
+    final_regex_map = [
+        (r"From a மழை standpoint, ([^ ]+) பெறுகிறது an average of \*\*([^*]+)\*\*, உடன் the ([^*]+?) being the dominant மழை source at \*\*([^*]+)\*\*\.", lambda m: f"மழை அடிப்படையில், {_ta_named(m.group(1))} மாவட்டம் சராசரியாக **{m.group(2)}** பெறுகிறது; முக்கிய மழை ஆதாரம் {_ta_named(m.group(3))}, அதன் அளவு **{m.group(4)}**."),
+        (r"From a மழை standpoint, ([^ ]+) பெறுகிறது an average of \*\*([^*]+)\*\*, உடன் the (.+?) being .*? at \*\*([^*]+)\*\*\.", lambda m: f"மழை அடிப்படையில், {_ta_named(m.group(1))} மாவட்டம் சராசரியாக **{m.group(2)}** பெறுகிறது; முக்கிய மழை ஆதாரம் {_ta_named(m.group(3))}, அதன் அளவு **{m.group(4)}**."),
+        (r"Out of ([0-9,]+) ஹெக்டேர் under சாகுபடி, ([0-9,]+) ஹெக்டேர் உறுதியான பாசனம் வசதி\.", lambda m: f"சாகுபடியில் உள்ள {m.group(1)} ஹெக்டேர் பரப்பளவில், {m.group(2)} ஹெக்டேர் உறுதியான பாசன வசதி கொண்டது."),
+        (r"\*\*([0-9.]+)% இன் நிகர விதைப்பு பரப்பளவு\*\*", lambda m: f"**நிகர விதைப்பு பரப்பளவில் {m.group(1)}%**"),
+        (r"### உர பரிந்துரை . ([^ ]+) இல் \*\*([^*]+)\*\*", lambda m: f"### உர பரிந்துரை - **{_ta_named(m.group(2))}** மாவட்டத்தில் {_ta_named(m.group(1))}"),
+        (r"\*\*மண்:\*\* ([^.]+)\.", lambda m: f"**மண்:** {_ta_named(m.group(1))}."),
+    ]
+    for pattern, replacement in final_regex_map:
+        out = re.sub(pattern, replacement, out, flags=re.I | re.S)
+    out = out.replace("June–September", "ஜூன்-செப்டம்பர்")
+    out = out.replace("October–December", "அக்டோபர்-டிசம்பர்")
+    out = out.replace("நெல்? பயிருக்கு", "நெல் பயிருக்கு")
+    return out
+
+
 def _tamil_response(result: dict) -> dict:
+    result = dict(result)
+    if result.get("intent") == "cost_estimate":
+        rich_cost = _format_tamil_cost_estimate(result)
+        if rich_cost:
+            result["text"] = _ensure_tamil_followup_chips(rich_cost, result.get("intent", "general"), result.get("memory") or {})
+            return result
+    rich_formatters = {
+        "wage_info": _format_tamil_wage_info,
+        "yield_trend": _format_tamil_yield_trend,
+        "best_district_for_crop": _format_tamil_best_districts,
+        "whatif": _format_tamil_whatif,
+    }
+    formatter = rich_formatters.get(result.get("intent"))
+    if formatter:
+        rich_text = formatter(result)
+        if rich_text:
+            result["text"] = _ensure_tamil_followup_chips(rich_text, result.get("intent", "general"), result.get("memory") or {})
+            return result
+
+    original_text = re.sub(r"\n\n---\n\*\*FOLLOWUP_CHIPS:[\s\S]*?\*\*\s*$", "", result.get("text") or "").strip()
+    translated = _translate_same_template_to_tamil(original_text)
+    latin_words = re.findall(r"\b[A-Za-z]{4,}\b", translated)
+    allowed_latin = {"TNAU", "IPM", "NPK", "AI"}
+    leak_count = sum(1 for word in latin_words if word.upper() not in allowed_latin)
+    if leak_count > 6 or re.search(r"\b(failed|denied|error|exception|traceback)\b", translated, re.I):
+        translated = _strict_tamil_summary(result.get("intent", "general"), result.get("memory") or {}, original_text)
+    result["text"] = _ensure_tamil_followup_chips(translated, result.get("intent", "general"), result.get("memory") or {})
+    return result
+
     intent = result.get("intent", "general")
     memory = result.get("memory") or {}
     text = result.get("text") or ""
@@ -779,6 +1427,8 @@ def _context_clear_fields(query: str) -> list[str]:
 
 def _detect_intent(query: str) -> str:
     ql = query.lower().strip()
+    if re.search(r"\bwhat if\b|\bsuppose\b|\bsimulate\b", ql):
+        return "whatif"
     scores = {}
     for intent, patterns in INTENT_PATTERNS.items():
         score = sum(1 for p in patterns if re.search(p, ql))
@@ -1089,8 +1739,9 @@ def _fallback_router(message: str, district: str, soil: str, season: str, crop: 
 
     if intent == "best_district_for_crop":
         requested_season = _extract_season(message)
-        text = nlg.describe_best_districts_for_crop(de.get_best_districts_for_crop(crop, requested_season, top_n=7))
-        return {"text": _ensure_followup_chips(text, intent, {**ctx, "district": None}), "intent": intent, "district": None, "memory": new_memory}
+        best_data = de.get_best_districts_for_crop(crop, requested_season, top_n=7)
+        text = nlg.describe_best_districts_for_crop(best_data)
+        return {"text": _ensure_followup_chips(text, intent, {**ctx, "district": None}), "intent": intent, "district": None, "memory": new_memory, "data": {"best_district_data": best_data}}
 
     if intent in district_required and not district:
         unknown = _candidate_unknown_district(message)
@@ -1136,9 +1787,11 @@ def _fallback_router(message: str, district: str, soil: str, season: str, crop: 
             rain_delta = -200.0
         elif re.search(r"rain(?:fall)?\s+(?:is\s+|gets\s+|becomes\s+)?(more|increase|increased|improve|higher)", message, re.I):
             rain_delta = 200.0
-        text = nlg.describe_whatif(district, crop, de.compute_whatif_simulation(district, crop, soil, season, irr_delta, rain_delta))
+        response_data["whatif_data"] = de.compute_whatif_simulation(district, crop, soil, season, irr_delta, rain_delta)
+        text = nlg.describe_whatif(district, crop, response_data["whatif_data"])
     elif intent == "cost_estimate":
-        text = nlg.describe_cost_estimate(district, crop, de.estimate_crop_cost(district, crop))
+        response_data["cost_data"] = de.estimate_crop_cost(district, crop)
+        text = nlg.describe_cost_estimate(district, crop, response_data["cost_data"])
     elif intent == "profit_estimate":
         text = nlg.describe_profit_estimate(de.estimate_crop_profit(district, crop))
     elif intent == "multi_criteria":
@@ -1159,11 +1812,13 @@ def _fallback_router(message: str, district: str, soil: str, season: str, crop: 
         response_data["rain_data"] = de.get_rainfall_stats(district)
         text = nlg.describe_rainfall(district, response_data["rain_data"])
     elif intent == "wage_info":
-        text = nlg.describe_wages(district, de.get_wage_info(district))
+        response_data["wage_data"] = de.get_wage_info(district)
+        text = nlg.describe_wages(district, response_data["wage_data"])
     elif intent == "irrigation_info":
         text = nlg.describe_irrigation(district, de.get_irrigation_profile(district))
     elif intent == "yield_trend":
-        text = nlg.describe_yield_trend(district, crop, de.get_yield_trend(district, crop))
+        response_data["yield_trend_data"] = de.get_yield_trend(district, crop)
+        text = nlg.describe_yield_trend(district, crop, response_data["yield_trend_data"])
     elif intent == "pest_risk":
         response_data["pest_data"] = de.get_pest_risk(district)
         text = nlg.describe_pest_risk(district, response_data["pest_data"])

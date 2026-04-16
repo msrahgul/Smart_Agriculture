@@ -1,14 +1,14 @@
-
+﻿
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Farming AI – Tamil Nadu Agricultural Assistant</title>
+    <title>Smart Farming AI - Tamil Nadu Agricultural Assistant</title>
     <meta name="description" content="AI-powered smart farming chatbot for Tamil Nadu.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+Tamil:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -34,12 +34,12 @@
             <p class="sidebar-label">Soil Identification</p>
             <div class="tool-card">
                 <p class="tool-help">Upload a soil photo to identify soil type and use it in follow-up queries.</p>
-                <label class="sidebar-upload-btn" for="soilImageInput"><span>📎 Upload Soil Image</span></label>
+                <label class="sidebar-upload-btn" for="soilImageInput"><span>Upload Soil Image</span></label>
                 <input type="file" id="soilImageInput" accept="image/*" hidden>
                 <div class="sidebar-soil-preview" id="soilPreviewStrip" style="display:none;">
                     <div class="soil-status-icon" aria-hidden="true">✓</div>
                     <span id="soilPreviewName">Analyzing soil...</span>
-                    <button class="remove-img-btn" id="removeImgBtn" title="Remove image">✕</button>
+                    <button class="remove-img-btn" id="removeImgBtn" title="Remove image">×</button>
                 </div>
             </div>
         </div>
@@ -87,21 +87,50 @@
             <div class="context-panel" id="contextPanel">
                 <div class="context-help">Current stored values used for follow-up questions.</div>
                 <div class="context-grid">
-                    <div class="context-item"><span class="context-key">Crop</span><strong id="ctxCrop">—</strong></div>
-                    <div class="context-item"><span class="context-key">Location</span><strong id="ctxDistrict">—</strong></div>
-                    <div class="context-item"><span class="context-key">Soil</span><strong id="ctxSoil">—</strong></div>
-                    <div class="context-item"><span class="context-key">Month</span><strong id="ctxMonth">—</strong></div>
-                    <div class="context-item"><span class="context-key">Season</span><strong id="ctxSeason">—</strong></div>
+                    <div class="context-item"><span class="context-key">Crop</span><strong id="ctxCrop">-</strong></div>
+                    <div class="context-item"><span class="context-key">Location</span><strong id="ctxDistrict">-</strong></div>
+                    <div class="context-item"><span class="context-key">Soil</span><strong id="ctxSoil">-</strong></div>
+                    <div class="context-item"><span class="context-key">Month</span><strong id="ctxMonth">-</strong></div>
+                    <div class="context-item"><span class="context-key">Season</span><strong id="ctxSeason">-</strong></div>
+                </div>
+            </div>
+        </div>
+        <div class="sidebar-section weather-section">
+            <p class="sidebar-label">Weather Updates</p>
+            <div class="weather-panel" id="weatherPanel">
+                <div class="weather-empty" id="weatherEmpty">Select or ask about a district to load live weather.</div>
+                <div class="weather-content" id="weatherContent" hidden>
+                    <div class="weather-head">
+                        <div>
+                            <span class="weather-district" id="weatherDistrict">-</span>
+                            <span class="weather-source">Open-Meteo</span>
+                        </div>
+                        <strong class="weather-temp" id="weatherTemp">-</strong>
+                    </div>
+                    <div class="weather-condition" id="weatherCondition">-</div>
+                    <div class="weather-metrics">
+                        <span id="weatherHumidity">Humidity -</span>
+                        <span id="weatherRain">Rain -</span>
+                        <span id="weatherWind">Wind -</span>
+                    </div>
+                    <div class="weather-subtitle">Next hours</div>
+                    <div class="weather-hourly" id="weatherHourly"></div>
+                    <div class="weather-subtitle">Next days</div>
+                    <div class="weather-daily" id="weatherDaily"></div>
                 </div>
             </div>
         </div>
         <div class="sidebar-section" id="whatifPanel">
             <p class="sidebar-label">What-If Simulator</p>
             <div class="whatif-panel">
-                <h4>🔬 Scenario Simulator</h4>
-                <div class="whatif-slider-row"><div class="whatif-label"><span>💧 Irrigation Change</span><strong id="whatifIrrVal">0%</strong></div><input type="range" id="whatifIrrSlider" class="whatif-slider" min="-50" max="50" value="0" step="5"></div>
-                <div class="whatif-slider-row"><div class="whatif-label"><span>🌧️ Rainfall Change</span><strong id="whatifRainVal">0 mm</strong></div><input type="range" id="whatifRainSlider" class="whatif-slider" min="-500" max="500" value="0" step="50"></div>
-                <button class="simulate-btn" id="simulateBtn">▶ Run Simulation</button>
+                <h4>Scenario Simulator</h4>
+                <div class="whatif-slider-row"><div class="whatif-label"><span>Irrigation Change</span><strong id="whatifIrrVal">0%</strong></div><input type="range" id="whatifIrrSlider" class="whatif-slider" min="-50" max="50" value="0" step="5"></div>
+                <div class="whatif-slider-row"><div class="whatif-label"><span>Rainfall Change</span><strong id="whatifRainVal">0 mm</strong></div><input type="range" id="whatifRainSlider" class="whatif-slider" min="-500" max="500" value="0" step="50"></div>
+                <div class="whatif-slider-row"><div class="whatif-label"><span>Fertilizer</span><strong id="whatifFertVal">0%</strong></div><input type="range" id="whatifFertSlider" class="whatif-slider" min="-50" max="50" value="0" step="5"></div>
+                <div class="whatif-slider-row"><div class="whatif-label"><span>Temperature</span><strong id="whatifTempVal">0 C</strong></div><input type="range" id="whatifTempSlider" class="whatif-slider" min="-5" max="5" value="0" step="1"></div>
+                <div class="whatif-slider-row"><div class="whatif-label"><span>Pest Intensity</span><strong id="whatifPestVal">0%</strong></div><input type="range" id="whatifPestSlider" class="whatif-slider" min="0" max="100" value="0" step="5"></div>
+                <div class="whatif-slider-row"><div class="whatif-label"><span>Soil Moisture</span><strong id="whatifMoistureVal">55%</strong></div><input type="range" id="whatifMoistureSlider" class="whatif-slider" min="0" max="100" value="55" step="5"></div>
+                <button class="simulate-btn" id="simulateBtn">Run Simulation</button>
             </div>
         </div>
     </aside>
@@ -111,10 +140,10 @@
             <div class="topbar-info"><div class="status-dot"></div><div class="topbar-copy"><span class="topbar-title">Smart Farming AI</span><span class="topbar-sub">Professional agricultural assistant for Tamil Nadu farming insights</span></div></div>
             <div class="topbar-context" aria-label="Active context summary">
                 <span class="topbar-context-label">Active Context</span>
-                <span class="topbar-context-chip" id="topCtxCrop">Crop: —</span>
-                <span class="topbar-context-chip" id="topCtxDistrict">Location: —</span>
+                <span class="topbar-context-chip" id="topCtxCrop">Crop: -</span>
+                <span class="topbar-context-chip" id="topCtxDistrict">Location: -</span>
             </div>
-            <div class="topbar-actions"><button class="language-toggle" id="languageToggle" type="button" title="Switch language"><span class="lang-en">EN</span><span class="lang-divider">/</span><span class="lang-ta">தமிழ்</span></button><button class="action-btn tts-toggle-btn" id="ttsBtnGlobal" title="Enable text-to-speech"><span class="tts-icon">🔇</span></button><button class="action-btn clear-action" id="clearChat" title="Clear conversation">🗑</button></div>
+            <div class="topbar-actions"><button class="language-toggle" id="languageToggle" type="button" title="Switch language"><span class="lang-en">EN</span><span class="lang-divider">/</span><span class="lang-ta">தமிழ்</span></button><button class="action-btn tts-toggle-btn" id="ttsBtnGlobal" title="Enable text-to-speech"><span class="tts-icon">Audio</span></button><button class="action-btn clear-action" id="clearChat" title="Clear conversation">Reset</button></div>
         </header>
         <div class="messages-wrap" id="messagesWrap" role="log" aria-live="polite" aria-label="Chat messages"><div class="messages-list" id="messagesList"></div></div>
         <div class="input-area">
@@ -127,8 +156,12 @@
                         </div>
                     </div>
                     <input type="text" id="chatInput" placeholder="Ask about crops, rainfall, fertilizer, irrigation, pest risks..." autocomplete="off" spellcheck="false">
-                    <button class="voice-btn" id="voiceInputBtn" title="Speak your question" type="button">🎙</button>
-                    <button class="send-btn" id="sendBtn" title="Send message">➤</button>
+                    <button class="voice-btn" id="voiceInputBtn" title="Speak your question" type="button" aria-label="Speak your question">
+                        <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M18 11a6 6 0 0 1-12 0"/><path d="M12 17v4"/><path d="M8 21h8"/></svg>
+                    </button>
+                    <button class="send-btn" id="sendBtn" title="Send message" type="button" aria-label="Send message">
+                        <svg class="btn-icon send-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4 3 11.4l7.3 2.3L17.8 7l-5.7 8.3 4.9 4.7L21 4Z"/></svg>
+                    </button>
                 </div>
                 <div class="input-footer"><span id="voiceStatus">Tamil Nadu Smart Farming • Context-aware follow-up support</span></div>
             </div>

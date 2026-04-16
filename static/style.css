@@ -22,7 +22,7 @@
     --shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.24);
     --shadow-md: 0 18px 40px rgba(0, 0, 0, 0.28);
     --blur: blur(18px) saturate(160%);
-    --font-ui: 'Outfit', sans-serif;
+    --font-ui: 'Outfit', 'Noto Sans Tamil', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
     --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     --sidebar-w: 320px;
@@ -3583,14 +3583,24 @@ body {
     order: 1 !important;
 }
 
-#whatifPanel {
+.weather-section {
     display: block !important;
     order: 2 !important;
 }
 
-.sidebar-section:has(.tool-card) {
+#whatifPanel {
     display: block !important;
     order: 3 !important;
+}
+
+.estimator-section {
+    display: block !important;
+    order: 4 !important;
+}
+
+.sidebar-section:has(.tool-card) {
+    display: block !important;
+    order: 5 !important;
 }
 
 .chat-menu {
@@ -3616,6 +3626,222 @@ body {
 .sidebar-soil-preview {
     margin-top: 8px !important;
     padding: 8px !important;
+}
+
+/* Chat input icon buttons */
+.voice-btn,
+.send-btn {
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0 !important;
+}
+
+.btn-icon {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.send-icon {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    stroke: none;
+}
+
+.voice-btn.listening .btn-icon {
+    animation: mic-pulse 1s ease-in-out infinite;
+}
+
+.voice-btn::after,
+.voice-btn.listening::after {
+    content: none !important;
+}
+
+@keyframes mic-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(0.9); opacity: 0.7; }
+}
+
+.weather-panel {
+    padding: 10px;
+    border-radius: 8px;
+    background:
+        linear-gradient(145deg, rgba(5, 27, 19, 0.92), rgba(11, 65, 39, 0.58)),
+        rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(169, 247, 196, 0.16);
+}
+
+.weather-empty {
+    color: var(--text-3);
+    font-size: 0.74rem;
+    line-height: 1.35;
+}
+
+.weather-content {
+    display: grid;
+    gap: 8px;
+}
+
+.weather-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.weather-district {
+    display: block;
+    color: var(--text-1);
+    font-size: 0.88rem;
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.weather-source {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-3);
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.weather-temp {
+    color: var(--accent-2);
+    font-size: 1.3rem;
+    line-height: 1;
+}
+
+.weather-condition {
+    color: var(--text-2);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.weather-metrics {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 5px;
+}
+
+.weather-metrics span,
+.weather-mini-row {
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: rgba(2, 17, 12, 0.48);
+    border: 1px solid rgba(215, 255, 230, 0.08);
+    color: var(--text-2);
+    font-size: 0.7rem;
+}
+
+.weather-subtitle {
+    margin-top: 2px;
+    color: var(--accent-2);
+    font-size: 0.64rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.weather-hourly,
+.weather-daily {
+    display: grid;
+    gap: 5px;
+}
+
+.weather-mini-row strong {
+    color: var(--text-1);
+    font-size: 0.72rem;
+}
+
+.weather-mini-row em {
+    color: var(--text-3);
+    font-style: normal;
+    font-size: 0.68rem;
+}
+
+.sim-result,
+.profit-result,
+.estimator-panel {
+    border-radius: 8px;
+    border: 1px solid rgba(215, 255, 230, 0.12);
+    background: rgba(255, 255, 255, 0.055);
+}
+
+.estimator-panel {
+    padding: 10px;
+}
+
+.estimator-grid {
+    display: grid;
+    gap: 6px;
+}
+
+.estimator-grid input {
+    width: 100%;
+    height: 32px;
+    padding: 6px 9px;
+    border-radius: 8px;
+    border: 1px solid rgba(215, 255, 230, 0.15);
+    background: rgba(2, 17, 12, 0.58);
+    color: var(--text-1);
+    font-family: var(--font-ui);
+    font-size: 0.74rem;
+    outline: none;
+}
+
+.estimator-grid input:focus {
+    border-color: rgba(169, 247, 196, 0.5);
+    box-shadow: 0 0 0 3px rgba(66, 217, 133, 0.1);
+}
+
+.estimate-btn {
+    margin-top: 8px;
+}
+
+.sim-result,
+.profit-result {
+    display: grid;
+    gap: 5px;
+    margin-top: 8px;
+    padding: 8px;
+    color: var(--text-2);
+    font-size: 0.72rem;
+    line-height: 1.35;
+}
+
+.sim-result span,
+.profit-result span {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.sim-result strong,
+.profit-result strong {
+    color: var(--accent-2);
+}
+
+.sim-result em,
+.profit-result em {
+    color: var(--text-3);
+    font-style: normal;
 }
 
 /* Remove floating Active Context from chat response area */

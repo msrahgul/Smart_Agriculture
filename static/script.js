@@ -27,10 +27,29 @@ const ctxMonth = document.getElementById('ctxMonth');
 const ctxSeason = document.getElementById('ctxSeason');
 const topCtxCrop = document.getElementById('topCtxCrop');
 const topCtxDistrict = document.getElementById('topCtxDistrict');
+const weatherEmpty = document.getElementById('weatherEmpty');
+const weatherContent = document.getElementById('weatherContent');
+const weatherDistrict = document.getElementById('weatherDistrict');
+const weatherTemp = document.getElementById('weatherTemp');
+const weatherCondition = document.getElementById('weatherCondition');
+const weatherHumidity = document.getElementById('weatherHumidity');
+const weatherRain = document.getElementById('weatherRain');
+const weatherWind = document.getElementById('weatherWind');
+const weatherHourly = document.getElementById('weatherHourly');
+const weatherDaily = document.getElementById('weatherDaily');
+const weatherSource = document.querySelector('.weather-source');
 const whatifIrrSlider = document.getElementById('whatifIrrSlider');
 const whatifRainSlider = document.getElementById('whatifRainSlider');
 const whatifIrrVal = document.getElementById('whatifIrrVal');
 const whatifRainVal = document.getElementById('whatifRainVal');
+const whatifFertSlider = document.getElementById('whatifFertSlider');
+const whatifTempSlider = document.getElementById('whatifTempSlider');
+const whatifPestSlider = document.getElementById('whatifPestSlider');
+const whatifMoistureSlider = document.getElementById('whatifMoistureSlider');
+const whatifFertVal = document.getElementById('whatifFertVal');
+const whatifTempVal = document.getElementById('whatifTempVal');
+const whatifPestVal = document.getElementById('whatifPestVal');
+const whatifMoistureVal = document.getElementById('whatifMoistureVal');
 const simulateBtn = document.getElementById('simulateBtn');
 const manualCrop = document.getElementById('manualCrop');
 const manualDistrict = document.getElementById('manualDistrict');
@@ -42,6 +61,9 @@ const resetContextBtn = document.getElementById('resetContextBtn');
 const inputCard = document.querySelector('.input-card');
 const chatMenuBtn = document.getElementById('chatMenuBtn');
 const chatMenuPanel = document.getElementById('chatMenuPanel');
+let lastWeatherDistrict = null;
+let weatherRequestId = 0;
+let latestWeatherData = null;
 
 function setChatMenuOpen(open) {
   if (!chatMenuBtn || !chatMenuPanel) return;
@@ -142,16 +164,124 @@ function syncManualContextInputs() {
 }
 
 function updateContextUI(memory = {}) {
+  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+  const previousDistrict = activeContext.district;
   activeContext = { ...activeContext, ...memory };
   if (ctxCrop) ctxCrop.textContent = prettyContextValue(activeContext.crop);
   if (ctxDistrict) ctxDistrict.textContent = prettyContextValue(activeContext.district);
   if (ctxSoil) ctxSoil.textContent = prettyContextValue(activeContext.soil);
   if (ctxMonth) ctxMonth.textContent = prettyContextValue(activeContext.month);
   if (ctxSeason) ctxSeason.textContent = prettyContextValue(activeContext.season);
-  if (topCtxCrop) topCtxCrop.textContent = `Crop: ${prettyContextValue(activeContext.crop)}`;
-  if (topCtxDistrict) topCtxDistrict.textContent = `Location: ${prettyContextValue(activeContext.district)}`;
+  if (topCtxCrop) topCtxCrop.textContent = `${t.cropLabel}: ${prettyContextValue(activeContext.crop)}`;
+  if (topCtxDistrict) topCtxDistrict.textContent = `${t.locationLabel}: ${prettyContextValue(activeContext.district)}`;
   syncManualContextInputs();
   updateWhatIfLabels();
+  if (activeContext.district && activeContext.district !== previousDistrict) {
+    loadWeatherForDistrict(activeContext.district);
+  } else if (!activeContext.district) {
+    resetWeatherUI();
+  }
+}
+
+function formatWeatherNumber(value, suffix = '') {
+  if (value === null || value === undefined || value === '') return '—';
+  const number = Number(value);
+  if (Number.isNaN(number)) return '—';
+  return `${Math.round(number)}${suffix}`;
+}
+
+function formatWeatherTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(11, 16) || value;
+  return date.toLocaleTimeString('en-IN', { hour: 'numeric', hour12: true });
+}
+
+function formatWeatherDate(value) {
+  if (!value) return '—';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(APP_LANGUAGE === 'ta' ? 'ta-IN' : 'en-IN', { weekday: 'short' });
+}
+
+function localizeWeatherCondition(text) {
+  if (APP_LANGUAGE !== 'ta') return text || 'Weather update';
+  const value = String(text || '').toLowerCase();
+  if (value.includes('rain')) return 'மழை வாய்ப்பு';
+  if (value.includes('clear')) return 'தெளிந்த வானம்';
+  if (value.includes('cloud')) return 'மேகமூட்டம்';
+  if (value.includes('fog')) return 'மூடுபனி';
+  if (value.includes('thunder')) return 'இடி மின்னல் வாய்ப்பு';
+  if (value.includes('offline')) return 'பருவகால வானிலை மதிப்பீடு';
+  return 'வானிலை புதுப்பிப்பு';
+}
+
+function resetWeatherUI(message = null) {
+  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+  lastWeatherDistrict = null;
+  latestWeatherData = null;
+  if (weatherEmpty) {
+    weatherEmpty.hidden = false;
+    weatherEmpty.textContent = message || t.weatherEmpty;
+  }
+  if (weatherContent) weatherContent.hidden = true;
+}
+
+function renderWeather(data) {
+  if (!weatherContent) return;
+  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+  latestWeatherData = data;
+  const current = data.current || {};
+  if (weatherEmpty) weatherEmpty.hidden = true;
+  weatherContent.hidden = false;
+  if (weatherDistrict) weatherDistrict.textContent = data.district || 'Weather';
+  if (weatherSource) weatherSource.textContent = data.source || 'Open-Meteo';
+  if (weatherTemp) weatherTemp.textContent = formatWeatherNumber(current.temp_c, '°C');
+  if (weatherCondition) weatherCondition.textContent = localizeWeatherCondition(current.condition);
+  if (weatherHumidity) weatherHumidity.textContent = `${t.humidityLabel} ${formatWeatherNumber(current.humidity_pct, '%')}`;
+  if (weatherRain) weatherRain.textContent = `${t.rainLabel} ${formatWeatherNumber(current.rain_mm ?? current.precipitation_mm, ' mm')}`;
+  if (weatherWind) weatherWind.textContent = `${t.windLabel} ${formatWeatherNumber(current.wind_kmh, ' km/h')}`;
+  if (weatherHourly) {
+    weatherHourly.innerHTML = '';
+    (data.hourly || []).slice(0, 4).forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'weather-mini-row';
+      row.innerHTML = `<span>${formatWeatherTime(item.time)}</span><strong>${formatWeatherNumber(item.temp_c, '°')}</strong><em>${formatWeatherNumber(item.rain_probability_pct, '% rain')}</em>`;
+      weatherHourly.appendChild(row);
+    });
+  }
+  if (weatherDaily) {
+    weatherDaily.innerHTML = '';
+    (data.daily || []).slice(0, 3).forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'weather-mini-row';
+      row.innerHTML = `<span>${formatWeatherDate(item.date)}</span><strong>${formatWeatherNumber(item.temp_min_c, '°')} / ${formatWeatherNumber(item.temp_max_c, '°')}</strong><em>${formatWeatherNumber(item.rain_sum_mm, ' mm')}</em>`;
+      weatherDaily.appendChild(row);
+    });
+  }
+}
+
+async function loadWeatherForDistrict(district) {
+  if (!district || district === lastWeatherDistrict) return;
+  lastWeatherDistrict = district;
+  const requestId = ++weatherRequestId;
+  if (weatherEmpty) {
+    weatherEmpty.hidden = false;
+    weatherEmpty.textContent = APP_LANGUAGE === 'ta' ? `${prettyContextValue(district)} வானிலை ஏற்றப்படுகிறது...` : `Loading weather for ${prettyContextValue(district)}...`;
+  }
+  if (weatherContent) weatherContent.hidden = true;
+  try {
+    const res = await fetch(`/weather?district=${encodeURIComponent(district)}`);
+    const data = await res.json();
+    if (requestId !== weatherRequestId) return;
+    if (!res.ok || data.error) {
+      resetWeatherUI(data.error || 'Weather is unavailable right now.');
+      return;
+    }
+    renderWeather(data);
+  } catch (_) {
+    if (requestId === weatherRequestId) resetWeatherUI('Weather is unavailable right now.');
+  }
 }
 
 function clearContextUI() {
@@ -270,11 +400,21 @@ function stripMarkdown(text) {
 function cleanSpeechText(text) {
   return stripMarkdown(removeFollowupMarker(text))
     .replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF\uFE0F]/gu, '')
+    .replace(/\bRs\.?\s*/gi, 'rupees ')
+    .replace(/\bkg\b/gi, 'kilograms')
     .replace(/\b(t\/ha)\b/gi, ' tonnes per hectare')
     .replace(/\bNPK\b/g, 'N P K')
     .replace(/\bmm\b/g, ' millimetres')
+    .replace(/\bkm\/h\b/gi, 'kilometres per hour')
+    .replace(/%/g, ' percent')
+    .replace(/[₹]/g, ' rupees ')
+    .replace(/[–—]/g, ' to ')
+    .replace(/:/g, '. ')
+    .replace(/;/g, '. ')
     .replace(/\bha\b/g, ' hectares')
     .replace(/\s+([,.])/g, '$1')
+    .replace(/\.{2,}/g, '.')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -293,7 +433,7 @@ function findTamilVoice(voices = getAvailableVoices()) {
     null;
 }
 
-function waitForVoices(timeoutMs = 1800) {
+function waitForVoices(timeoutMs = 2800) {
   if (!window.speechSynthesis) return Promise.resolve([]);
   const existing = speechSynthesis.getVoices();
   if (existing.length) return Promise.resolve(existing);
@@ -313,16 +453,20 @@ function loadPreferredVoice(lang = 'en-IN') {
     preferredVoice = findTamilVoice(voices);
     return preferredVoice;
   }
+  const naturalVoiceHints = /(natural|neural|online|aria|jenny|guy|sonia|libby|ravi|heera|google|microsoft)/i;
   preferredVoice =
+    voices.find(v => /en-IN/i.test(v.lang) && naturalVoiceHints.test(v.name)) ||
     voices.find(v => /en-IN/i.test(v.lang)) ||
-    voices.find(v => /India/i.test(v.name)) ||
+    voices.find(v => /India/i.test(v.name) && naturalVoiceHints.test(v.name)) ||
+    voices.find(v => /^en-(GB|US|AU)/i.test(v.lang) && naturalVoiceHints.test(v.name)) ||
+    voices.find(v => /^en-/i.test(v.lang) && naturalVoiceHints.test(v.name)) ||
     voices.find(v => /^en-/i.test(v.lang)) ||
     voices[0] ||
     null;
   return preferredVoice;
 }
 
-function splitSpeechText(text, maxLen = 180) {
+function splitSpeechText(text, maxLen = 260) {
   const sentences = text.match(/[^.!?।]+[.!?।]*/g) || [text];
   const chunks = [];
   let current = '';
@@ -333,8 +477,9 @@ function splitSpeechText(text, maxLen = 180) {
         chunks.push(current);
         current = '';
       }
-      for (let i = 0; i < trimmed.length; i += maxLen) {
-        chunks.push(trimmed.slice(i, i + maxLen));
+      const parts = trimmed.match(new RegExp(`.{1,${maxLen}}(\\s|$)`, 'g')) || [trimmed];
+      for (const part of parts) {
+        if (part.trim()) chunks.push(part.trim());
       }
       return;
     }
@@ -362,14 +507,16 @@ function speakNextChunk() {
   currentUtterance = new SpeechSynthesisUtterance(chunk);
   currentUtterance.lang = currentSpeechLang;
   currentUtterance.voice = preferredVoice || null;
-  currentUtterance.rate = currentSpeechLang === 'ta-IN' ? 0.86 : 0.94;
-  currentUtterance.pitch = currentSpeechLang === 'ta-IN' ? 1.0 : 1.02;
+  currentUtterance.rate = currentSpeechLang === 'ta-IN' ? 0.86 : 0.9;
+  currentUtterance.pitch = currentSpeechLang === 'ta-IN' ? 1.0 : 0.98;
   currentUtterance.volume = 1;
   currentUtterance.onend = () => {
     if (runId !== speechRunId) return;
     clearInterval(speechKeepAlive);
     currentUtterance = null;
-    speakNextChunk();
+    setTimeout(() => {
+      if (runId === speechRunId) speakNextChunk();
+    }, currentSpeechLang === 'ta-IN' ? 90 : 70);
   };
   currentUtterance.onerror = () => {
     if (runId !== speechRunId) return;
@@ -423,8 +570,8 @@ function updateTTSButton() {
   }
   ttsBtnGlobal.classList.toggle('tts-active', ttsEnabled);
   ttsBtnGlobal.title = ttsEnabled ? t.disableTTS : t.enableTTS;
-  ttsBtnGlobal.querySelector('.tts-icon').textContent = ttsEnabled ? 'Sound on' : 'Audio';
-  ttsBtnGlobal.querySelector('.tts-label').textContent = ttsEnabled ? 'On' : 'Off';
+  ttsBtnGlobal.querySelector('.tts-icon').textContent = ttsEnabled ? t.soundOnLabel : t.audioLabel;
+  ttsBtnGlobal.querySelector('.tts-label').textContent = ttsEnabled ? t.ttsOn : t.ttsOff;
 }
 function toggleGlobalTTS() { ttsEnabled = !ttsEnabled; updateTTSButton(); if (!ttsEnabled) stopSpeaking(); }
 
@@ -563,6 +710,125 @@ const UI_TEXT = {
   }
 };
 
+Object.assign(UI_TEXT.en, {
+  logoTitle: 'SmartFarm AI',
+  logoSub: 'Tamil Nadu Agricultural Intelligence',
+  uploadSoil: 'Upload Soil Image',
+  scenarioTitle: 'Scenario Simulator',
+  irrigationChange: 'Irrigation Change',
+  rainfallChange: 'Rainfall Change',
+  fertilizerChange: 'Fertilizer',
+  temperatureChange: 'Temperature',
+  pestIntensity: 'Pest Intensity',
+  soilMoisture: 'Soil Moisture',
+  simulate: 'Run Simulation',
+  simulateFor: district => `Simulate for ${district}`,
+  weatherLabel: 'Weather Updates',
+  weatherEmpty: 'Select or ask about a district to load live weather.',
+  nextHours: 'Next hours',
+  nextDays: 'Next days',
+  humidityLabel: 'Humidity',
+  rainLabel: 'Rain',
+  windLabel: 'Wind',
+  toolsLabel: 'Tools',
+  soilOption: 'Soil Identification',
+  languageButton: 'English',
+  audioLabel: 'Audio',
+  soundOnLabel: 'Sound on',
+  ttsOn: 'On',
+  ttsOff: 'Off',
+  resetLabel: 'Reset',
+  skipLink: 'Skip to chat input',
+  inputFooter: 'Tamil Nadu Smart Farming • Context-aware follow-up support',
+  manualUpdated: 'Manual context updated.',
+  noDistrictSimulation: 'Please set a district first, then run the simulation again.',
+});
+
+Object.assign(UI_TEXT.ta, {
+  documentTitle: 'ஸ்மார்ட் வேளாண்மை AI - தமிழ்நாடு வேளாண்மை உதவியாளர்',
+  logoTitle: 'ஸ்மார்ட் ஃபார்ம் AI',
+  logoSub: 'தமிழ்நாடு வேளாண்மை நுண்ணறிவு',
+  topbarTitle: 'ஸ்மார்ட் வேளாண்மை AI',
+  topbarSub: 'தமிழ்நாடு விவசாய தகவல்களுக்கான தொழில்முறை உதவியாளர்',
+  soilLabel: 'மண் அடையாளம்',
+  soilHelp: 'மண் வகையை அறிய மண் புகைப்படத்தை பதிவேற்றவும்.',
+  uploadSoil: 'மண் படத்தை பதிவேற்றவும்',
+  manualLabel: 'கையேடு சூழல்',
+  cropLabel: 'பயிர்',
+  locationLabel: 'இடம்',
+  soilFieldLabel: 'மண்',
+  monthLabel: 'மாதம்',
+  seasonLabel: 'பருவம்',
+  applyContext: 'சூழலை பயன்படுத்து',
+  resetContext: 'மீட்டமை',
+  activeLabel: 'செயலில் உள்ள சூழல்',
+  contextHelp: 'அடுத்த கேள்விகளுக்குப் பயன்படுத்தப்படும் தற்போதைய மதிப்புகள்.',
+  whatifLabel: 'என்ன ஆகும்? சோதனை',
+  scenarioTitle: 'சூழ்நிலை சோதனை',
+  irrigationChange: 'பாசன மாற்றம்',
+  rainfallChange: 'மழை மாற்றம்',
+  fertilizerChange: 'உரம்',
+  temperatureChange: 'வெப்பநிலை',
+  pestIntensity: 'பூச்சி தீவிரம்',
+  soilMoisture: 'மண் ஈரப்பதம்',
+  simulate: 'சோதனையை இயக்கு',
+  simulateFor: district => `${district} க்கான சோதனை`,
+  weatherLabel: 'வானிலை புதுப்பிப்புகள்',
+  weatherEmpty: 'நேரடி வானிலையை காண மாவட்டத்தை தேர்ந்தெடுக்கவும் அல்லது கேள்வியில் குறிப்பிடவும்.',
+  nextHours: 'அடுத்த மணிநேரங்கள்',
+  nextDays: 'அடுத்த நாட்கள்',
+  humidityLabel: 'ஈரப்பதம்',
+  rainLabel: 'மழை',
+  windLabel: 'காற்று',
+  toolsLabel: 'கருவிகள்',
+  soilOption: 'மண் அடையாளம்',
+  languageButton: 'தமிழ்',
+  audioLabel: 'ஒலி',
+  soundOnLabel: 'ஒலி இயக்கு',
+  ttsOn: 'இயக்கம்',
+  ttsOff: 'நிறுத்தம்',
+  resetLabel: 'மீட்டமை',
+  skipLink: 'உரை உள்ளீட்டுக்கு செல்லவும்',
+  selectSoil: 'மண் தேர்வு',
+  alluvialSoil: 'வண்டல் மண்',
+  blackSoil: 'கரிசல் மண்',
+  claySoil: 'களிமண்',
+  redSoil: 'சிவப்பு மண்',
+  selectMonth: 'மாதம் தேர்வு',
+  selectSeason: 'பருவம் தேர்வு',
+  winter: 'குளிர்காலம்',
+  summer: 'கோடைக்காலம்',
+  kharifRainy: 'காரிஃப் / மழைக்காலம்',
+  rabi: 'ரபி',
+  autumn: 'இலையுதிர் காலம்',
+  wholeYear: 'முழு ஆண்டு / நிரந்தர பயிர்',
+  months: ['ஜனவரி', 'பிப்ரவரி', 'டிசம்பர்', 'மார்ச்', 'ஏப்ரல்', 'மே', 'ஜூன்', 'ஜூலை', 'ஆகஸ்ட்', 'செப்டம்பர்', 'அக்டோபர்', 'நவம்பர்'],
+  enableTTS: 'குரல் பதில்களை இயக்கு',
+  disableTTS: 'குரல் பதில்களை நிறுத்து',
+  clearTitle: 'உரையாடலை அழிக்கவும்',
+  micTitle: 'உங்கள் கேள்வியை பேசுங்கள்',
+  micStopTitle: 'கேட்பதை நிறுத்து',
+  sendTitle: 'செய்தி அனுப்பு',
+  sidebarTitle: 'பக்கப்பட்டியை திற/மூடு',
+  removeImageTitle: 'படத்தை அகற்று',
+  listening: 'கேட்கிறது... உங்கள் விவசாய கேள்வியை பேசுங்கள்.',
+  voiceUnsupported: 'இந்த உலாவியில் குரல் உள்ளீடு ஆதரிக்கப்படவில்லை.',
+  heard: text => `கேட்டது: ${text}`,
+  micPermission: 'மைக்ரோஃபோன் அனுமதி தடுக்கப்பட்டுள்ளது. மைக்ரோஃபோன் அணுகலை அனுமதிக்கவும்.',
+  voiceTryAgain: 'குரல் உள்ளீடு நிறுத்தப்பட்டது. மீண்டும் முயற்சிக்கவும்.',
+  voiceStarting: 'மைக்ரோஃபோன் தொடங்குகிறது...',
+  voiceSending: 'குரல் கேள்வி அனுப்பப்படுகிறது...',
+  noSpeech: 'பேச்சு கண்டறியப்படவில்லை. மைக் அழுத்தி மீண்டும் முயற்சிக்கவும்.',
+  voiceStopped: 'குரல் உள்ளீடு நிறுத்தப்பட்டது.',
+  tamilVoiceMissing: 'இந்த உலாவி அல்லது சாதனத்தில் தமிழ் குரல் இல்லை. தமிழ் குரலை நிறுவவும் அல்லது இயக்கு.',
+  manualUpdated: 'கையேடு சூழல் புதுப்பிக்கப்பட்டது.',
+  noDistrictSimulation: 'முதலில் ஒரு மாவட்டத்தை அமைத்து பின்னர் சோதனையை மீண்டும் இயக்கவும்.',
+  inputFooter: 'தமிழ்நாடு ஸ்மார்ட் வேளாண்மை • சூழல் சார்ந்த தொடர்ச்சி உதவி',
+  cropPlaceholder: 'உ.தா. நெல்',
+  districtPlaceholder: 'உ.தா. மதுரை',
+  chatPlaceholder: 'பயிர், மழை, உரம், பாசனம், பூச்சி அபாயம் பற்றி கேளுங்கள்...',
+});
+
 function setText(selector, value) {
   const el = document.querySelector(selector);
   if (el) el.textContent = value;
@@ -595,17 +861,24 @@ function applyPageLanguage() {
   const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
   document.documentElement.lang = APP_LANGUAGE === 'ta' ? 'ta' : 'en';
   document.title = t.documentTitle;
+  setText('.skip-link', t.skipLink);
   setText('.logo-title', t.logoTitle);
   setText('.logo-sub', t.logoSub);
-  setText('.topbar-title', t.topbarTitle);
-  setText('.topbar-sub', t.topbarSub);
-  const sidebarLabels = document.querySelectorAll('.sidebar-label');
-  if (sidebarLabels[0]) sidebarLabels[0].textContent = t.soilLabel;
-  if (sidebarLabels[1]) sidebarLabels[1].textContent = t.manualLabel;
-  if (sidebarLabels[2]) sidebarLabels[2].textContent = sidebarLabels[2].closest('#whatifPanel') ? t.whatifLabel : t.activeLabel;
-  if (sidebarLabels[3]) sidebarLabels[3].textContent = t.whatifLabel;
+  setText('.topbar-title', UI_TEXT.en.topbarTitle);
+  setText('.topbar-sub', UI_TEXT.en.topbarSub);
+  setText('.sidebar-section:has(#contextPanel) .sidebar-label', t.activeLabel);
+  setText('.weather-section .sidebar-label', t.weatherLabel);
+  setText('#whatifPanel .sidebar-label', t.whatifLabel);
+  setText('.sidebar-section:has(.tool-card) .sidebar-label', t.soilLabel);
   setText('.tool-help', t.soilHelp);
   setText('.sidebar-upload-btn span', t.uploadSoil);
+  setText('#weatherEmpty', t.weatherEmpty);
+  const weatherSubtitles = document.querySelectorAll('.weather-subtitle');
+  if (weatherSubtitles[0]) weatherSubtitles[0].textContent = t.nextHours;
+  if (weatherSubtitles[1]) weatherSubtitles[1].textContent = t.nextDays;
+  if (weatherHumidity && weatherHumidity.textContent.includes('-')) weatherHumidity.textContent = `${t.humidityLabel} -`;
+  if (weatherRain && weatherRain.textContent.includes('-')) weatherRain.textContent = `${t.rainLabel} -`;
+  if (weatherWind && weatherWind.textContent.includes('-')) weatherWind.textContent = `${t.windLabel} -`;
   const labels = document.querySelectorAll('.manual-field label');
   if (labels[0]) labels[0].textContent = t.cropLabel;
   if (labels[1]) labels[1].textContent = t.locationLabel;
@@ -615,7 +888,7 @@ function applyPageLanguage() {
   setText('#applyContextBtn', t.applyContext);
   setText('#resetContextBtn', t.resetContext);
   setText('.context-help', t.contextHelp);
-  setText('.topbar-context-label', APP_LANGUAGE === 'ta' ? 'Active Context' : 'Active Context');
+  setText('.topbar-context-label', t.activeLabel);
   const contextKeys = document.querySelectorAll('.context-key');
   if (contextKeys[0]) contextKeys[0].textContent = t.cropLabel;
   if (contextKeys[1]) contextKeys[1].textContent = t.locationLabel;
@@ -626,6 +899,10 @@ function applyPageLanguage() {
   const whatifSpans = document.querySelectorAll('.whatif-label span');
   if (whatifSpans[0]) whatifSpans[0].textContent = t.irrigationChange;
   if (whatifSpans[1]) whatifSpans[1].textContent = t.rainfallChange;
+  if (whatifSpans[2]) whatifSpans[2].textContent = t.fertilizerChange;
+  if (whatifSpans[3]) whatifSpans[3].textContent = t.temperatureChange;
+  if (whatifSpans[4]) whatifSpans[4].textContent = t.pestIntensity;
+  if (whatifSpans[5]) whatifSpans[5].textContent = t.soilMoisture;
   if (manualSoil) {
     setSelectText(manualSoil, [
       { value: '', text: t.selectSoil },
@@ -661,14 +938,24 @@ function applyPageLanguage() {
   }
   if (simulateBtn) simulateBtn.textContent = activeContext.district ? t.simulateFor(activeContext.district) : t.simulate;
   if (clearChatBtn) clearChatBtn.textContent = APP_LANGUAGE === 'ta' ? 'Reset' : 'Reset';
+  if (clearChatBtn) clearChatBtn.textContent = t.resetLabel;
+  setText('#chatMenuBtn', t.toolsLabel);
+  setText('.chat-menu-option', t.soilOption);
+  setText('.lang-en', 'English');
+  setText('.lang-divider', '/');
+  setText('.lang-ta', 'தமிழ்');
   setTitle('#clearChat', t.clearTitle);
   setTitle('#voiceInputBtn', isListening ? t.micStopTitle : t.micTitle);
   setTitle('#sendBtn', t.sendTitle);
   setTitle('#sidebarToggle', t.sidebarTitle);
   setTitle('#removeImgBtn', t.removeImageTitle);
+  if (voiceInputBtn) voiceInputBtn.setAttribute('aria-label', isListening ? t.micStopTitle : t.micTitle);
+  if (sendBtn) sendBtn.setAttribute('aria-label', t.sendTitle);
+  if (sidebarToggle) sidebarToggle.setAttribute('aria-label', t.sidebarTitle);
   setPlaceholder('#manualCrop', t.cropPlaceholder);
   setPlaceholder('#manualDistrict', t.districtPlaceholder);
   setPlaceholder('#chatInput', t.chatPlaceholder);
+  if (latestWeatherData && weatherContent && !weatherContent.hidden) renderWeather(latestWeatherData);
   setVoiceStatus(t.inputFooter);
   updateTTSButton();
 }
@@ -676,7 +963,7 @@ function applyPageLanguage() {
 function updateLanguageUI() {
   if (!languageToggle) return;
   languageToggle.classList.toggle('tamil-mode', APP_LANGUAGE === 'ta');
-  languageToggle.title = APP_LANGUAGE === 'ta' ? 'தமிழில் உள்ளது. English க்கு மாற்ற' : 'English mode. Switch to Tamil';
+  languageToggle.title = APP_LANGUAGE === 'ta' ? 'தமிழ் மொழி இயக்கத்தில் உள்ளது' : 'English mode is active';
   applyPageLanguage();
   if (recognition) recognition.lang = languageCode();
 }
@@ -700,8 +987,8 @@ function updateVoiceButton() {
   if (!voiceInputBtn) return;
   const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
   voiceInputBtn.classList.toggle('listening', isListening);
-  voiceInputBtn.textContent = isListening ? '■' : '🎙';
   voiceInputBtn.title = isListening ? t.micStopTitle : t.micTitle;
+  voiceInputBtn.setAttribute('aria-label', isListening ? t.micStopTitle : t.micTitle);
 }
 
 function createSpeechRecognition(langOverride = null) {
@@ -976,10 +1263,10 @@ async function sendMessage(text) {
     if (data.session_id) { SESSION_ID = data.session_id; localStorage.setItem('sf_session', SESSION_ID); }
     if (data.memory) updateContextUI(data.memory);
     hideTyping();
-    renderMessage(data.text || 'No response received.', 'bot');
+    renderMessage(data.text || (APP_LANGUAGE === 'ta' ? 'பதில் கிடைக்கவில்லை.' : 'No response received.'), 'bot');
   } catch (_) {
     hideTyping();
-    renderMessage('❌ Connection error. Please check if the server is running.', 'bot');
+    renderMessage(APP_LANGUAGE === 'ta' ? 'இணைப்பு பிழை. சேவையகம் இயங்குகிறதா என சரிபார்க்கவும்.' : 'Connection error. Please check if the server is running.', 'bot');
   } finally {
     isProcessing = false;
     sendBtn.disabled = false;
@@ -997,6 +1284,7 @@ async function analyzeSoilImage(file) {
   const form = new FormData();
   form.append('image', file);
   form.append('session_id', SESSION_ID || '');
+  form.append('language', APP_LANGUAGE);
   if (activeContext.district) form.append('district', activeContext.district);
   try {
     const res = await fetch('/soil', { method: 'POST', body: form });
@@ -1009,7 +1297,7 @@ async function analyzeSoilImage(file) {
   } catch (_) {
     if (soilPreviewName) soilPreviewName.textContent = `Upload failed: ${file.name}`;
     hideTyping();
-    renderMessage('❌ Soil image upload failed.', 'bot');
+    renderMessage(APP_LANGUAGE === 'ta' ? 'மண் படத்தை பதிவேற்ற முடியவில்லை.' : 'Soil image upload failed.', 'bot');
   } finally {
     isProcessing = false;
     soilImageInput.value = '';
@@ -1019,23 +1307,81 @@ async function analyzeSoilImage(file) {
 
 function updateWhatIfLabels() {
   const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
-  if (whatifIrrVal) whatifIrrVal.textContent = `${parseInt(whatifIrrSlider.value)}%`;
-  if (whatifRainVal) whatifRainVal.textContent = `${parseInt(whatifRainSlider.value)} mm`;
+  if (whatifIrrVal && whatifIrrSlider) whatifIrrVal.textContent = `${parseInt(whatifIrrSlider.value)}%`;
+  if (whatifRainVal && whatifRainSlider) whatifRainVal.textContent = `${parseInt(whatifRainSlider.value)} mm`;
+  if (whatifFertVal && whatifFertSlider) whatifFertVal.textContent = `${parseInt(whatifFertSlider.value)}%`;
+  if (whatifTempVal && whatifTempSlider) whatifTempVal.textContent = `${parseInt(whatifTempSlider.value)} C`;
+  if (whatifPestVal && whatifPestSlider) whatifPestVal.textContent = `${parseInt(whatifPestSlider.value)}%`;
+  if (whatifMoistureVal && whatifMoistureSlider) whatifMoistureVal.textContent = `${parseInt(whatifMoistureSlider.value)}%`;
   if (simulateBtn) simulateBtn.textContent = activeContext.district ? t.simulateFor(activeContext.district) : t.simulate;
 }
 
-function sendSimulation() {
+function formatSimulationResponse(data, payload) {
+  const crop = data.crop || payload.crop || 'Current crop';
+  const district = data.district || payload.district;
+  const yieldImpact = Number(data.yield_impact_pct || 0);
+  const pestChange = Number(data.pest_risk_change_pct || 0);
+  const yieldDirection = yieldImpact > 0 ? 'increase' : (yieldImpact < 0 ? 'decrease' : 'stay nearly stable');
+  const pestDirection = pestChange > 0 ? 'increase' : (pestChange < 0 ? 'decrease' : 'stay nearly stable');
+  return `## What-If Simulation: ${crop} in ${district}
+
+### Scenario Inputs
+- Rainfall change: **${payload.rainfall_delta_mm} mm**
+- Irrigation change: **${payload.irrigation_delta_pct}%**
+- Fertilizer change: **${payload.fertilizer_delta_pct}%**
+- Temperature change: **${payload.temperature_delta_c} C**
+- Pest intensity: **${payload.pest_intensity_pct}%**
+- Soil moisture: **${payload.soil_moisture_pct}%**
+
+### Expected Result
+- Expected yield impact: **${yieldImpact}%**. Yield may **${yieldDirection}** under this scenario.
+- Pest risk change: **${pestChange}%**. Pest pressure may **${pestDirection}**.
+
+### Recommended Action
+${data.recommended_action || 'Monitor field conditions and adjust irrigation, fertilizer, and pest scouting based on local observations.'}`;
+}
+
+async function sendSimulation() {
   const district = activeContext.district;
-  if (!district) { renderMessage((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).noDistrictSimulation, 'bot'); return; }
-  const irrDelta = parseInt(whatifIrrSlider.value);
-  const rainDelta = parseInt(whatifRainSlider.value);
-  let query = 'What if';
-  if (irrDelta !== 0) query += irrDelta > 0 ? ` irrigation improved by ${irrDelta}%` : ` irrigation reduced by ${Math.abs(irrDelta)}%`;
-  if (rainDelta !== 0) query += `${irrDelta !== 0 ? ' and' : ''} rainfall ${rainDelta > 0 ? 'increased' : 'reduced'} by ${Math.abs(rainDelta)}mm`;
-  if (irrDelta === 0 && rainDelta === 0) query = 'What if irrigation reduced by 20%';
-  if (activeContext.crop) query += ` for ${activeContext.crop}`;
-  query += ` in ${district}`;
-  sendMessage(query);
+  if (!district) {
+    renderMessage((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).noDistrictSimulation, 'bot');
+    return;
+  }
+  const payload = {
+    district,
+    crop: activeContext.crop,
+    soil: activeContext.soil,
+    season: activeContext.season,
+    irrigation_delta_pct: parseInt(whatifIrrSlider.value || 0),
+    rainfall_delta_mm: parseInt(whatifRainSlider.value || 0),
+    fertilizer_delta_pct: parseInt(whatifFertSlider.value || 0),
+    temperature_delta_c: parseInt(whatifTempSlider.value || 0),
+    pest_intensity_pct: parseInt(whatifPestSlider.value || 0),
+    soil_moisture_pct: parseInt(whatifMoistureSlider.value || 55),
+    language: APP_LANGUAGE,
+  };
+  const scenarioText = APP_LANGUAGE === 'ta'
+    ? `${district} மாவட்டத்தில் ${payload.crop || 'தேர்ந்தெடுத்த பயிர்'} பயிருக்கு என்ன ஆகும்? சோதனை: மழை ${payload.rainfall_delta_mm} மில்லிமீட்டர், பாசனம் ${payload.irrigation_delta_pct}%, உரம் ${payload.fertilizer_delta_pct}%, வெப்பநிலை ${payload.temperature_delta_c} C, பூச்சி தீவிரம் ${payload.pest_intensity_pct}%, மண் ஈரப்பதம் ${payload.soil_moisture_pct}%.`
+    : `Run what-if simulation for ${payload.crop || 'current crop'} in ${district}: rainfall ${payload.rainfall_delta_mm} mm, irrigation ${payload.irrigation_delta_pct}%, fertilizer ${payload.fertilizer_delta_pct}%, temperature ${payload.temperature_delta_c} C, pest intensity ${payload.pest_intensity_pct}%, soil moisture ${payload.soil_moisture_pct}%.`;
+  renderMessage(scenarioText, 'user');
+  showTyping();
+  if (simulateBtn) simulateBtn.disabled = true;
+  try {
+    const res = await fetch('/simulate_advanced', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Simulation failed');
+    hideTyping();
+    renderMessage(data.text || formatSimulationResponse(data, payload), 'bot');
+  } catch (err) {
+    hideTyping();
+    renderMessage(APP_LANGUAGE === 'ta' ? 'சோதனை இப்போது கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்.' : `Simulation unavailable: ${err.message || 'Please try again.'}`, 'bot');
+  } finally {
+    if (simulateBtn) simulateBtn.disabled = false;
+  }
 }
 
 async function resetAllOnLoad() {
@@ -1098,6 +1444,10 @@ if (removeImgBtn) removeImgBtn.addEventListener('click', () => {
 });
 if (whatifIrrSlider) whatifIrrSlider.addEventListener('input', updateWhatIfLabels);
 if (whatifRainSlider) whatifRainSlider.addEventListener('input', updateWhatIfLabels);
+if (whatifFertSlider) whatifFertSlider.addEventListener('input', updateWhatIfLabels);
+if (whatifTempSlider) whatifTempSlider.addEventListener('input', updateWhatIfLabels);
+if (whatifPestSlider) whatifPestSlider.addEventListener('input', updateWhatIfLabels);
+if (whatifMoistureSlider) whatifMoistureSlider.addEventListener('input', updateWhatIfLabels);
 if (simulateBtn) simulateBtn.addEventListener('click', sendSimulation);
 if (applyContextBtn) applyContextBtn.addEventListener('click', applyManualContext);
 if (resetContextBtn) resetContextBtn.addEventListener('click', resetManualContext);
@@ -1105,7 +1455,7 @@ if (manualMonth) manualMonth.addEventListener('change', syncSeasonFromMonth);
 if (manualSeason) manualSeason.addEventListener('change', syncMonthFromSeason);
 if (window.speechSynthesis) {
   loadPreferredVoice();
-  speechSynthesis.onvoiceschanged = () => loadPreferredVoice();
+  speechSynthesis.onvoiceschanged = () => loadPreferredVoice(currentSpeechLang || languageCode());
 }
 initVoiceInput();
 
