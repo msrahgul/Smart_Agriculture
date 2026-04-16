@@ -1385,13 +1385,6 @@ async function sendSimulation() {
 }
 
 async function resetAllOnLoad() {
-  const oldSession = localStorage.getItem('sf_session');
-  if (oldSession) {
-    try { await fetch('/reset_session', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ session_id: oldSession })}); } catch (_) {}
-  }
-  localStorage.removeItem('sf_session');
-  SESSION_ID = null;
-  clearContextUI();
   if (chatInput) chatInput.value = '';
   if (soilStrip) soilStrip.style.display = 'none';
   if (soilPreviewImg) soilPreviewImg.src = '';
@@ -1400,6 +1393,31 @@ async function resetAllOnLoad() {
   if (whatifIrrSlider) whatifIrrSlider.value = '0';
   if (whatifRainSlider) whatifRainSlider.value = '0';
   messagesList.innerHTML = '';
+}
+
+async function restoreSessionOnLoad() {
+  await resetAllOnLoad();
+  if (!SESSION_ID) {
+    clearContextUI();
+    return false;
+  }
+  try {
+    const res = await fetch(`/session?session_id=${encodeURIComponent(SESSION_ID)}`);
+    const data = await res.json();
+    if (data && data.memory) updateContextUI(data.memory);
+    if (Array.isArray(data.messages) && data.messages.length) {
+      messagesList.innerHTML = '';
+      data.messages.forEach(item => {
+        if (item && item.text && (item.role === 'user' || item.role === 'bot')) {
+          renderMessage(item.text, item.role, false, false);
+        }
+      });
+      return true;
+    }
+  } catch (_) {
+    updateContextUI(activeContext);
+  }
+  return false;
 }
 
 async function clearChat() {
@@ -1474,10 +1492,10 @@ document.addEventListener('keydown', e => {
 });
 
 (async function init() {
-  await resetAllOnLoad();
+  const restoredChat = await restoreSessionOnLoad();
   updateLanguageUI();
   updateTTSButton();
   updateWhatIfLabels();
-  renderWelcome();
+  if (!restoredChat) renderWelcome();
   chatInput.focus();
 })();

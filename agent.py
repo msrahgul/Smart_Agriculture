@@ -3,8 +3,12 @@
 agent.py – Smart Farming AI Agent
 Pure local routing and response orchestration.
 """
+import json
+import os
 import re
 from difflib import get_close_matches
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 import data_engine as de
 import nlg
 
@@ -138,6 +142,10 @@ INTENT_PATTERNS = {
     "soil_info": [r"soil type", r"what soil", r"identify soil", r"upload.*soil"],
     "greeting": GREETING_PATTERNS,
 }
+
+ALLOWED_AI_INTENTS = set(INTENT_PATTERNS)
+ALLOWED_AI_INTENTS.discard("greeting")
+ALLOWED_AI_INTENTS.add("general")
 
 
 def _all_known_crops() -> list[str]:
@@ -1272,6 +1280,162 @@ def _canonical_crop(name: str | None) -> str | None:
     return None
 
 
+def _normalize_ai_intent(value: str | None) -> str | None:
+    if not value:
+        return None
+    intent = str(value).strip().lower()
+    intent = re.sub(r"[^a-z0-9_]+", "_", intent).strip("_")
+    aliases = {
+        "crop_recommendation": "crop_recommend",
+        "crop_recommendations": "crop_recommend",
+        "rainfall": "rainfall_info",
+        "rainfall_query": "rainfall_info",
+        "weather": "rainfall_info",
+        "wage": "wage_info",
+        "wages": "wage_info",
+        "irrigation": "irrigation_info",
+        "district": "district_overview",
+        "overview": "district_overview",
+        "cost": "cost_estimate",
+        "profit": "profit_estimate",
+        "fertilizer": "fertilizer_recommendation",
+        "fertiliser": "fertilizer_recommendation",
+        "planting": "planting_time",
+        "best_district": "best_district_for_crop",
+        "yield": "yield_trend",
+        "yield_prediction": "yield_predict",
+        "pest_prediction": "pest_predict",
+        "soil": "soil_info",
+    }
+    intent = aliases.get(intent, intent)
+    return intent if intent in ALLOWED_AI_INTENTS else None
+
+
+def _normalize_ai_district(value: str | None) -> str | None:
+    if not value:
+        return None
+    exact = _exact_district(str(value))
+    if exact:
+        return exact
+    try:
+        return de.fuzzy_district(str(value))
+    except Exception:
+        return None
+
+
+def _normalize_ai_crop(value: str | None) -> str | None:
+    canonical = _canonical_crop(value)
+    return canonical.title() if canonical else None
+
+
+def _normalize_ai_soil(value: str | None) -> str | None:
+    if not value:
+        return None
+    ql = str(value).lower()
+    for soil, keywords in SOIL_KEYWORDS.items():
+        if soil in ql or any(keyword in ql for keyword in keywords):
+            return soil
+    return None
+
+
+def _normalize_ai_season(value: str | None) -> str | None:
+    if not value:
+        return None
+    ql = str(value).lower()
+    for season, keywords in SEASON_KEYWORDS.items():
+        if season.lower() == ql or any(keyword in ql for keyword in keywords):
+            return season
+    return None
+
+
+def _normalize_ai_month(value: str | None) -> str | None:
+    if not value:
+        return None
+    ql = str(value).strip().lower()
+    if ql in MONTH_TO_SEASON:
+        return ql.title()
+    if ql[:3] in MONTH_ALIASES:
+        return MONTH_ALIASES[ql[:3]].title()
+    return None
+
+
+def _parse_query_with_gemini(message: str, memory: dict | None, language: str | None = None) -> dict:
+    if os.environ.get("AI_PARSER_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+        return {}
+    api_key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip().strip('"').strip("'")
+    if not api_key:
+        return {}
+
+    model = os.environ.get("GEMINI_PARSER_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+    timeout = float(os.environ.get("AI_PARSER_TIMEOUT", "4") or 4)
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    current_context = {
+        "district": (memory or {}).get("district"),
+        "crop": (memory or {}).get("crop"),
+        "soil": (memory or {}).get("soil"),
+        "season": (memory or {}).get("season"),
+        "month": (memory or {}).get("month"),
+    }
+    prompt = {
+        "task": "Parse a Tamil or English Tamil Nadu farming assistant query into structured JSON only. Do not answer the farming question. Do not invent agricultural values.",
+        "allowed_intents": sorted(ALLOWED_AI_INTENTS),
+        "fields": {
+            "intent": "one allowed intent",
+            "district": "Tamil Nadu district name in English, or null",
+            "crop": "crop name in English, or null",
+            "soil": "one of alluvial soil, black soil, clay soil, red soil, or null",
+            "season": "one of Kharif, Rabi, Summer, Winter, Autumn, Whole Year, or null",
+            "month": "English month name, or null",
+            "language": "ta or en",
+        },
+        "rules": [
+            "Return JSON only.",
+            "Use current_context only when the query clearly refers to it.",
+            "For questions about cultivation cost, use intent cost_estimate.",
+            "For questions about wages or daily labour pay, use intent wage_info.",
+            "For questions about yield history or trend, use intent yield_trend.",
+            "For what-if, reduced/increased rain or irrigation scenarios, use intent whatif.",
+            "For best district for a crop, use intent best_district_for_crop.",
+            "Use null for unknown fields.",
+        ],
+        "current_context": current_context,
+        "query_language_hint": language or "",
+        "query": message,
+    }
+    body = {
+        "contents": [{"parts": [{"text": json.dumps(prompt, ensure_ascii=False)}]}],
+        "generationConfig": {
+            "temperature": 0,
+            "maxOutputTokens": 220,
+            "responseMimeType": "application/json",
+        },
+    }
+    try:
+        req = Request(
+            endpoint,
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(req, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        text = payload["candidates"][0]["content"]["parts"][0].get("text", "{}")
+        raw = json.loads(text)
+    except (HTTPError, URLError, TimeoutError, KeyError, IndexError, ValueError, json.JSONDecodeError, OSError):
+        return {}
+
+    parsed = {
+        "intent": _normalize_ai_intent(raw.get("intent")),
+        "district": _normalize_ai_district(raw.get("district")),
+        "crop": _normalize_ai_crop(raw.get("crop")),
+        "soil": _normalize_ai_soil(raw.get("soil")),
+        "season": _normalize_ai_season(raw.get("season")),
+        "month": _normalize_ai_month(raw.get("month")),
+        "language": "ta" if str(raw.get("language") or "").lower().startswith("ta") else ("en" if str(raw.get("language") or "").lower().startswith("en") else None),
+    }
+    return {key: value for key, value in parsed.items() if value}
+
+
 def _clean_entity_phrase(raw: str | None) -> str | None:
     if not raw:
         return None
@@ -1679,8 +1843,8 @@ def _fmt_pest_prediction(data: dict) -> str:
     )
 
 
-def _fallback_router(message: str, district: str, soil: str, season: str, crop: str, month: str, memory: dict) -> dict:
-    intent = _detect_intent(message)
+def _fallback_router(message: str, district: str, soil: str, season: str, crop: str, month: str, memory: dict, parsed_intent: str | None = None) -> dict:
+    intent = parsed_intent or _detect_intent(message)
     explicit_crop = _extract_crop(message)
 
     crop_independent_intents = {
@@ -1738,7 +1902,7 @@ def _fallback_router(message: str, district: str, soil: str, season: str, crop: 
             return {"text": _ensure_followup_chips(text, intent, {**ctx, "crop": None}), "intent": intent, "district": district, "memory": unknown_crop_memory}
 
     if intent == "best_district_for_crop":
-        requested_season = _extract_season(message)
+        requested_season = _extract_season(message) or season
         best_data = de.get_best_districts_for_crop(crop, requested_season, top_n=7)
         text = nlg.describe_best_districts_for_crop(best_data)
         return {"text": _ensure_followup_chips(text, intent, {**ctx, "district": None}), "intent": intent, "district": None, "memory": new_memory, "data": {"best_district_data": best_data}}
@@ -1857,6 +2021,10 @@ def process_query(message: str, history: list = None, language: str | None = Non
         return finalize({"text": WELCOME_TEXT, "intent": "greeting", "district": None, "memory": blank_mem})
 
     memory = _get_memory(history)
+    ai_parse = _parse_query_with_gemini(original_message, memory, language)
+    parsed_intent = ai_parse.get("intent")
+    if parsed_intent == "general":
+        parsed_intent = None
     clear_fields = _context_clear_fields(message)
     if clear_fields:
         new_memory = _clear_memory_fields(memory, clear_fields)
@@ -1869,11 +2037,11 @@ def process_query(message: str, history: list = None, language: str | None = Non
             "memory": new_memory,
         })
 
-    quick_district = _extract_district(message)
-    quick_soil = _extract_soil(message)
-    quick_month = _extract_month(message)
-    quick_season = _extract_season(message)
-    quick_crop = _extract_crop(message)
+    quick_district = ai_parse.get("district") or _extract_district(message)
+    quick_soil = ai_parse.get("soil") or _extract_soil(message)
+    quick_month = ai_parse.get("month") or _extract_month(message)
+    quick_season = ai_parse.get("season") or _extract_season(message)
+    quick_crop = ai_parse.get("crop") or _extract_crop(message)
 
     district = quick_district or memory.get("district")
     soil = quick_soil or memory.get("soil")
@@ -1892,7 +2060,8 @@ def process_query(message: str, history: list = None, language: str | None = Non
     if any(re.search(p, ql) for p in GREETING_PATTERNS):
         return finalize({"text": WELCOME_TEXT, "intent": "greeting", "district": district, "memory": new_memory})
 
-    if _detect_intent(message) == "general" and any([quick_district, quick_crop, quick_soil, quick_season, quick_month]):
+    detected_intent = parsed_intent or _detect_intent(message)
+    if detected_intent == "general" and any([quick_district, quick_crop, quick_soil, quick_season, quick_month]):
         text = _describe_context_update(new_memory)
         return finalize({
             "text": _ensure_followup_chips(text, "context_update", new_memory),
@@ -1901,4 +2070,4 @@ def process_query(message: str, history: list = None, language: str | None = Non
             "memory": new_memory,
         })
 
-    return finalize(_fallback_router(message, district, soil, season, crop, month, memory))
+    return finalize(_fallback_router(message, district, soil, season, crop, month, memory, parsed_intent=parsed_intent))

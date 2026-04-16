@@ -501,6 +501,20 @@ def set_context():
     return jsonify({"ok": True, "session_id": session_id, "memory": clean})
 
 
+@app.route("/session", methods=["GET"])
+def get_session():
+    session_id = (request.args.get("session_id") or "").strip()
+    memory = {"district": None, "soil": None, "season": None, "month": None, "crop": None}
+    messages = []
+    if session_id and session_id in conversation_store:
+        for item in conversation_store.get(session_id, []):
+            if item.get("role") == "system_memory" and isinstance(item.get("memory"), dict):
+                memory.update({key: item["memory"].get(key) or None for key in memory})
+            elif item.get("role") in {"user", "bot"} and item.get("text"):
+                messages.append({"role": item["role"], "text": item["text"]})
+    return jsonify({"ok": True, "session_id": session_id or None, "memory": memory, "messages": messages})
+
+
 @app.route("/soil", methods=["POST"])
 def soil():
     language = (request.form.get("language") or "en").strip().lower()
