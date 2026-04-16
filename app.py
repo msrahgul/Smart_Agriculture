@@ -477,6 +477,7 @@ def chat():
     return jsonify({
         "text": result["text"],
         "intent": result.get("intent", "general"),
+        "parser": result.get("parser", "local"),
         "district": result.get("district"),
         "memory": result.get("memory", {}),
         "session_id": session_id,

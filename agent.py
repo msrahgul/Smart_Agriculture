@@ -169,9 +169,27 @@ def _normalize_tamil_query(message: str) -> str:
     normalized = message
     additions = []
     direct_replacements = {
+        "மதுரைல": "Madurai",
+        "மதுரையில்": "Madurai",
+        "மதுரைக்கு": "Madurai",
+        "கோயம்புத்தூர்ல": "Coimbatore",
+        "கோவையில": "Coimbatore",
+        "கோவைல": "Coimbatore",
+        "நெல்லுக்கு": "rice",
+        "நெல்லு": "rice",
+        "நெல்": "rice",
+        "அரிசி": "rice",
         "கூலி": "wage",
         "சம்பளம்": "wage",
         "வேளாண்மை கூலி": "wage",
+        "எவ்ளோ காசு": "cost",
+        "எவ்வளவு காசு": "cost",
+        "எவ்வளவு செலவு": "cost",
+        "எவ்ளோ செலவு": "cost",
+        "காசு ஆகும்": "cost",
+        "காசு": "cost",
+        "ஒரு ஏக்கருக்கு": "one acre",
+        "ஏக்கருக்கு": "per acre",
         "மகசூல் போக்கு": "yield trend",
         "மகசூல் நிலை": "yield trend",
         "சிறந்த மாவட்டம்": "best district",
@@ -2008,12 +2026,16 @@ def process_query(message: str, history: list = None, language: str | None = Non
     message = (message or "").strip()
     tamil_requested = (language or "").lower().startswith("ta")
     original_message = message
+    parser_source = "local"
     if _is_tamil_text(message):
         message = _normalize_tamil_query(message)
 
     def finalize(result: dict) -> dict:
+        result["parser"] = parser_source
         if tamil_requested:
-            return _tamil_response(result)
+            parsed_result = _tamil_response(result)
+            parsed_result["parser"] = parser_source
+            return parsed_result
         return result
 
     blank_mem = {"district": None, "soil": None, "season": None, "month": None, "crop": None}
@@ -2022,6 +2044,8 @@ def process_query(message: str, history: list = None, language: str | None = Non
 
     memory = _get_memory(history)
     ai_parse = _parse_query_with_gemini(original_message, memory, language)
+    if ai_parse:
+        parser_source = "gemini"
     parsed_intent = ai_parse.get("intent")
     if parsed_intent == "general":
         parsed_intent = None
