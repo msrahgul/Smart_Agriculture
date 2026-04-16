@@ -13,6 +13,7 @@ const languageToggle = document.getElementById('languageToggle');
 const clearChatBtn = document.getElementById('clearChat');
 const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebar = document.querySelector('.sidebar');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
 const soilImageInput = document.getElementById('soilImageInput');
 const soilStrip = document.getElementById('soilPreviewStrip');
 const soilPreviewImg = document.getElementById('soilPreviewImg');
@@ -24,6 +25,8 @@ const ctxDistrict = document.getElementById('ctxDistrict');
 const ctxSoil = document.getElementById('ctxSoil');
 const ctxMonth = document.getElementById('ctxMonth');
 const ctxSeason = document.getElementById('ctxSeason');
+const topCtxCrop = document.getElementById('topCtxCrop');
+const topCtxDistrict = document.getElementById('topCtxDistrict');
 const whatifIrrSlider = document.getElementById('whatifIrrSlider');
 const whatifRainSlider = document.getElementById('whatifRainSlider');
 const whatifIrrVal = document.getElementById('whatifIrrVal');
@@ -36,6 +39,16 @@ const manualMonth = document.getElementById('manualMonth');
 const manualSeason = document.getElementById('manualSeason');
 const applyContextBtn = document.getElementById('applyContextBtn');
 const resetContextBtn = document.getElementById('resetContextBtn');
+const inputCard = document.querySelector('.input-card');
+const chatMenuBtn = document.getElementById('chatMenuBtn');
+const chatMenuPanel = document.getElementById('chatMenuPanel');
+
+function setChatMenuOpen(open) {
+  if (!chatMenuBtn || !chatMenuPanel) return;
+  chatMenuPanel.hidden = !open;
+  chatMenuBtn.classList.toggle('menu-open', Boolean(open));
+  chatMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
 
 let APP_LANGUAGE = localStorage.getItem('sf_language') || 'en';
 if (!['en', 'ta'].includes(APP_LANGUAGE)) APP_LANGUAGE = APP_LANGUAGE.startsWith('ta') ? 'ta' : 'en';
@@ -135,6 +148,8 @@ function updateContextUI(memory = {}) {
   if (ctxSoil) ctxSoil.textContent = prettyContextValue(activeContext.soil);
   if (ctxMonth) ctxMonth.textContent = prettyContextValue(activeContext.month);
   if (ctxSeason) ctxSeason.textContent = prettyContextValue(activeContext.season);
+  if (topCtxCrop) topCtxCrop.textContent = `Crop: ${prettyContextValue(activeContext.crop)}`;
+  if (topCtxDistrict) topCtxDistrict.textContent = `Location: ${prettyContextValue(activeContext.district)}`;
   syncManualContextInputs();
   updateWhatIfLabels();
 }
@@ -401,9 +416,15 @@ function stopSpeaking() {
 function updateTTSButton() {
   if (!ttsBtnGlobal) return;
   const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+  if (!ttsBtnGlobal.querySelector('.tts-label')) {
+    const label = document.createElement('span');
+    label.className = 'tts-label';
+    ttsBtnGlobal.appendChild(label);
+  }
   ttsBtnGlobal.classList.toggle('tts-active', ttsEnabled);
   ttsBtnGlobal.title = ttsEnabled ? t.disableTTS : t.enableTTS;
-  ttsBtnGlobal.querySelector('.tts-icon').textContent = ttsEnabled ? '🔊' : '🔇';
+  ttsBtnGlobal.querySelector('.tts-icon').textContent = ttsEnabled ? 'Sound on' : 'Audio';
+  ttsBtnGlobal.querySelector('.tts-label').textContent = ttsEnabled ? 'On' : 'Off';
 }
 function toggleGlobalTTS() { ttsEnabled = !ttsEnabled; updateTTSButton(); if (!ttsEnabled) stopSpeaking(); }
 
@@ -581,7 +602,7 @@ function applyPageLanguage() {
   const sidebarLabels = document.querySelectorAll('.sidebar-label');
   if (sidebarLabels[0]) sidebarLabels[0].textContent = t.soilLabel;
   if (sidebarLabels[1]) sidebarLabels[1].textContent = t.manualLabel;
-  if (sidebarLabels[2]) sidebarLabels[2].textContent = t.activeLabel;
+  if (sidebarLabels[2]) sidebarLabels[2].textContent = sidebarLabels[2].closest('#whatifPanel') ? t.whatifLabel : t.activeLabel;
   if (sidebarLabels[3]) sidebarLabels[3].textContent = t.whatifLabel;
   setText('.tool-help', t.soilHelp);
   setText('.sidebar-upload-btn span', t.uploadSoil);
@@ -594,6 +615,7 @@ function applyPageLanguage() {
   setText('#applyContextBtn', t.applyContext);
   setText('#resetContextBtn', t.resetContext);
   setText('.context-help', t.contextHelp);
+  setText('.topbar-context-label', APP_LANGUAGE === 'ta' ? 'Active Context' : 'Active Context');
   const contextKeys = document.querySelectorAll('.context-key');
   if (contextKeys[0]) contextKeys[0].textContent = t.cropLabel;
   if (contextKeys[1]) contextKeys[1].textContent = t.locationLabel;
@@ -638,6 +660,7 @@ function applyPageLanguage() {
     ]);
   }
   if (simulateBtn) simulateBtn.textContent = activeContext.district ? t.simulateFor(activeContext.district) : t.simulate;
+  if (clearChatBtn) clearChatBtn.textContent = APP_LANGUAGE === 'ta' ? 'Reset' : 'Reset';
   setTitle('#clearChat', t.clearTitle);
   setTitle('#voiceInputBtn', isListening ? t.micStopTitle : t.micTitle);
   setTitle('#sendBtn', t.sendTitle);
@@ -1048,12 +1071,24 @@ function renderWelcome() {
   renderMessage(APP_LANGUAGE === 'ta' ? INTRO_MESSAGE_TA : INTRO_MESSAGE, 'bot', true, true);
 }
 
+function setSidebarOpen(open) {
+  if (!sidebar) return;
+  sidebar.classList.toggle('open', Boolean(open));
+  if (sidebarToggle) sidebarToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
 sendBtn.addEventListener('click', () => sendMessage(chatInput.value.trim()));
 chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(chatInput.value.trim()); } });
 if (voiceInputBtn) voiceInputBtn.addEventListener('click', toggleVoiceInput);
 if (languageToggle) languageToggle.addEventListener('click', toggleLanguage);
 clearChatBtn.addEventListener('click', clearChat);
-sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+sidebarToggle.addEventListener('click', () => setSidebarOpen(!sidebar.classList.contains('open')));
+if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', () => setSidebarOpen(false));
+if (chatMenuBtn) chatMenuBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  setChatMenuOpen(chatMenuPanel.hidden);
+});
+if (chatMenuPanel) chatMenuPanel.addEventListener('click', () => setChatMenuOpen(false));
 if (ttsBtnGlobal) ttsBtnGlobal.addEventListener('click', toggleGlobalTTS);
 if (soilImageInput) soilImageInput.addEventListener('change', () => { const file = soilImageInput.files[0]; if (file) analyzeSoilImage(file); });
 if (removeImgBtn) removeImgBtn.addEventListener('click', () => {
@@ -1075,9 +1110,17 @@ if (window.speechSynthesis) {
 initVoiceInput();
 
 document.addEventListener('click', e => {
-  if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
-    if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target)) sidebar.classList.remove('open');
+  if (chatMenuPanel && !chatMenuPanel.hidden && !e.target.closest('.chat-menu')) {
+    setChatMenuOpen(false);
   }
+  if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
+    if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target)) setSidebarOpen(false);
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') setChatMenuOpen(false);
+  if (e.key === 'Escape' && sidebar && sidebar.classList.contains('open')) setSidebarOpen(false);
 });
 
 (async function init() {
