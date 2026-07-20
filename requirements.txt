@@ -5,3 +5,6 @@ opencv-python
 pandas
 flask
 werkzeug
+python-dotenv
+protobuf>=6.31.1
+google-genai

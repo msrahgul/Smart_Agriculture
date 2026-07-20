@@ -32,18 +32,18 @@ SEASON_DEFAULT_MONTH = {
 
 SOIL_KEYWORDS = {
     "alluvial soil": ["alluvial", "alluvium", "river soil"],
-    "black soil": ["black", "regur", "black cotton"],
-    "clay soil": ["clay", "clayey"],
-    "red soil": ["red soil", "red", "laterite", "red loam"],
+    "black soil": ["black", "regur", "black cotton", "கருப்பு மண்", "கரிசல்"],
+    "clay soil": ["clay", "clayey", "களிமண்"],
+    "red soil": ["red soil", "red", "laterite", "red loam", "சிவப்பு மண்", "செம்மண்"],
 }
 
 SEASON_KEYWORDS = {
-    "Kharif": ["kharif", "rainy", "rainy season", "monsoon season", "southwest monsoon", "sw monsoon"],
-    "Rabi": ["rabi", "northeast monsoon", "ne monsoon"],
-    "Summer": ["summer", "summer season", "hot season", "dry season"],
-    "Winter": ["winter", "winter season", "cold season"],
-    "Autumn": ["autumn", "autumn season"],
-    "Whole Year": ["whole year", "year round", "year-round", "annual", "perennial"],
+    "Kharif": ["kharif", "rainy", "rainy season", "monsoon season", "southwest monsoon", "sw monsoon", "காரிஃப்", "காரிப்", "மழைக்கால", "தென்மேற்கு பருவமழை"],
+    "Rabi": ["rabi", "northeast monsoon", "ne monsoon", "ரபி", "வடகிழக்கு பருவமழை"],
+    "Summer": ["summer", "summer season", "hot season", "dry season", "கோடை"],
+    "Winter": ["winter", "winter season", "cold season", "குளிர்காலம்"],
+    "Autumn": ["autumn", "autumn season", "இலையுதிர்காலம்"],
+    "Whole Year": ["whole year", "year round", "year-round", "annual", "perennial", "முழு ஆண்டு", "வருடம் முழுவதும்"],
 }
 
 KNOWN_CROPS = [
@@ -123,20 +123,25 @@ UNKNOWN_QUERY_TEXT = (
 
 INTENT_PATTERNS = {
     "best_district_for_crop": [r"which district.*(?:best|grow|grows|suitable)", r"where.*(?:best|grow|grows).*(?:crop|rice|coconut|groundnut|sugarcane|cotton|maize|banana)", r"best district", r"district.*(?:grows|grow).*best"],
-    "crop_recommend": [r"best crop", r"best crops", r"which crop", r"what crop", r"recommend crop", r"top crop", r"good crop", r"what can i grow"],
+    "crop_recommend": [r"best crop", r"best crops", r"which crop", r"what crop", r"recommend crop", r"top crop", r"good crop", r"what can i grow", r"சிறந்த\s*பயிர", r"எந்த\s*பயிர", r"என்ன\s*பயிர"],
     "suitability": [r"suitab", r"can\s*i grow", r"cani grow", r"can .* grow", r"is .+ good for", r"how suitable", r"score", r"rate", r"evaluate"],
-    "rainfall_info": [r"\brain(?:fall)?\b", r"precipitation", r"\bmonsoon rainfall\b", r"how much rain", r"annual rain"],
-    "wage_info": [r"wage", r"salary", r"labour cost", r"worker pay", r"daily wage"],
-    "irrigation_info": [r"irrigation", r"water source", r"canal", r"tank", r"groundwater", r"water availability"],
+    "rainfall_info": [r"\brain(?:fall)?\b", r"precipitation", r"\bmonsoon rainfall\b", r"how much rain", r"annual rain", r"மழை", r"பருவமழை"],
+    "wage_info": [r"wage", r"salary", r"labour cost", r"worker pay", r"daily wage", r"கூலி", r"சம்பளம்"],
+    "irrigation_info": [r"irrigation", r"water source", r"canal", r"tank", r"groundwater", r"water availability", r"பாசனம்", r"நீர்\s*வசதி"],
     "yield_trend": [r"yield trend", r"yield history", r"how has .+ yield changed", r"productivity over"],
     "pest_risk": [r"pest", r"disease", r"insect", r"fungal", r"blight", r"borer", r"aphid", r"whitefly"],
     "district_overview": [r"overview", r"profile", r"tell me about", r"summary of", r"agriculture in", r"everything about"],
     "cost_estimate": [r"cost", r"total cost", r"totoal cost", r"tot[a-z]* cost", r"expense", r"budget", r"investment", r"how much.*spend", r"cultivation cost"],
     "profit_estimate": [r"total profit", r"profit.*(?:growing|grow|planting|plant)", r"net profit", r"income.*(?:growing|grow)", r"revenue.*(?:growing|grow)"],
-    "fertilizer_recommendation": [r"fertilizer", r"fertiliser", r"manure", r"npk", r"urea", r"dap", r"potash"],
-    "planting_time": [r"best season", r"best month", r"which season", r"which month", r"when (?:to|should i) grow", r"when (?:to|should i) plant", r"season to grow", r"month to grow", r"planting time", r"sowing time"],
+    "fertilizer_recommendation": [r"fertilizer", r"fertiliser", r"manure", r"npk", r"urea", r"dap", r"potash", r"உரம்"],
+    "planting_time": [r"best season", r"best month", r"which season", r"which month", r"when (?:to|should i) grow", r"when (?:to|should i) plant", r"season to grow", r"month to grow", r"planting time", r"sowing time", r"எப்போது\s*(?:நட|விதை)", r"நடும்\s*நேரம்"],
     "whatif": [r"what if", r"if irrigation", r"if.*rain", r"simulate", r"suppose", r"assuming"],
-    "multi_criteria": [r"\bprofit\b", r"profitable", r"high profit", r"maximum profit", r"low water.*profit", r"minimum water.*profit", r"water efficient crop", r"drought.*profit"],
+    "multi_criteria": [
+        r"\bprofit\b", r"profitable", r"high profit", r"maximum profit",
+        r"low water.*profit", r"minimum water.*profit", r"water efficient crop", r"drought.*profit",
+        r"தண்ணீர்\s*குறைவு", r"குறைந்த\s*தண்ணீர்", r"குறைந்த\s*நீர்", r"குறைந்த\s*நீரில்",
+        r"வறட்சி", r"நீர்\s*சேமி", r"தண்ணீர்\s*சேமி",
+    ],
     "yield_predict": [r"predict yield", r"expected yield", r"forecast yield", r"yield prediction"],
     "pest_predict": [r"predict pest", r"predict.*risk", r"pest.*predict", r"ml pest"],
     "soil_info": [r"soil type", r"what soil", r"identify soil", r"upload.*soil"],
@@ -146,6 +151,80 @@ INTENT_PATTERNS = {
 ALLOWED_AI_INTENTS = set(INTENT_PATTERNS)
 ALLOWED_AI_INTENTS.discard("greeting")
 ALLOWED_AI_INTENTS.add("general")
+
+AI_PARSER_SOILS = ["alluvial soil", "black soil", "clay soil", "red soil"]
+AI_PARSER_SEASONS = ["Kharif", "Rabi", "Summer", "Winter", "Autumn", "Whole Year"]
+AI_PARSER_LANGS = ["en", "ta"]
+
+
+def _clean_api_key(value: str | None) -> str:
+    raw = (value or "").strip()
+    raw = raw.strip('"').strip("'").strip()
+    # Some .env editors accidentally prefix punctuation like =: or :
+    raw = re.sub(r"^[^A-Za-z0-9]+", "", raw)
+    return raw
+
+
+def _gemini_query_schema() -> dict:
+    allowed_intents = sorted(ALLOWED_AI_INTENTS)
+    return {
+        "type": "object",
+        "properties": {
+            "intent": {"type": ["string", "null"], "enum": allowed_intents + [None]},
+            "district": {"type": ["string", "null"], "maxLength": 60},
+            "crop": {"type": ["string", "null"], "maxLength": 60},
+            "soil": {"type": ["string", "null"], "enum": AI_PARSER_SOILS + [None]},
+            "season": {"type": ["string", "null"], "enum": AI_PARSER_SEASONS + [None]},
+            "month": {"type": ["string", "null"], "maxLength": 18},
+            "language": {"type": ["string", "null"], "enum": AI_PARSER_LANGS + [None]},
+        },
+        "required": ["intent", "district", "crop", "soil", "season", "month", "language"],
+        "additionalProperties": False,
+    }
+
+
+def _gemini_generate_structured_json(model: str, api_key: str, prompt_obj: dict, timeout: float) -> dict | None:
+    cfg = {
+        "temperature": 0,
+        "max_output_tokens": 220,
+        "response_mime_type": "application/json",
+        "response_json_schema": _gemini_query_schema(),
+    }
+
+    # Prefer the official SDK if installed; fall back to raw REST.
+    try:
+        from google import genai  # type: ignore
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=model,
+            contents=json.dumps(prompt_obj, ensure_ascii=False),
+            config=cfg,
+        )
+        text = getattr(response, "text", None) or ""
+        return json.loads(text) if text else None
+    except Exception:
+        pass
+
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    body = {
+        "contents": [{"parts": [{"text": json.dumps(prompt_obj, ensure_ascii=False)}]}],
+        "generationConfig": {
+            "temperature": 0,
+            "maxOutputTokens": 220,
+            "responseMimeType": "application/json",
+            "responseJsonSchema": _gemini_query_schema(),
+        },
+    }
+    req = Request(
+        endpoint,
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+        method="POST",
+    )
+    with urlopen(req, timeout=timeout) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    text = payload["candidates"][0]["content"]["parts"][0].get("text", "{}")
+    return json.loads(text)
 
 
 def _all_known_crops() -> list[str]:
@@ -531,7 +610,17 @@ def _strict_tamil_summary(intent: str, memory: dict, text: str = "") -> str:
     if intent == "profit_estimate":
         return f"{place}{crop_part}லாப மதிப்பீடு கணக்கிடப்பட்டுள்ளது. இது வரலாற்று மகசூல், சாகுபடி செலவு மற்றும் திட்டமிடல் விலை அடிப்படையிலான வழிகாட்டும் மதிப்பீடு மட்டுமே."
     if intent == "multi_criteria":
-        return f"{place}நீர் தேவை, மகசூல், சாகுபடி பரப்பு மற்றும் பதிவுகளின் நிலைத்தன்மை அடிப்படையில் பயிர் விருப்பங்கள் மதிப்பிடப்பட்டுள்ளன."
+        season_text = f" பருவம்: **{season}**." if season else ""
+        return (
+            f"{place}தண்ணீர் குறைவு/வறட்சி நிலையில் குறைந்த தண்ணீரில் வளரக்கூடிய பயிர்கள் சில:\n\n"
+            "• கம்பு (Bajra)\n"
+            "• சோளம் (Sorghum/Jowar)\n"
+            "• ராகி (Ragi)\n"
+            "• பாசிப்பயறு, உளுந்து (Pulses)\n"
+            "• நிலக்கடலை (Groundnut)\n"
+            "• எள் (Sesame)\n\n"
+            f"{season_text} மிகவும் தக்க பரிந்துரைக்காக உங்கள் மாவட்டம்/மண் வகை/பருவம் (அல்லது மாதம்) குறிப்பிடுங்கள்."
+        )
     if intent == "fertilizer_recommendation":
         return f"{place}{crop_part}உர பரிந்துரை தயாரிக்கப்பட்டுள்ளது. இறுதி அளவை மண் பரிசோதனை முடிவு மற்றும் உள்ளூர் வேளாண்மை அலுவலர் ஆலோசனைப்படி சரிசெய்யவும்."
     if intent == "planting_time":
@@ -1380,13 +1469,15 @@ def _normalize_ai_month(value: str | None) -> str | None:
 def _parse_query_with_gemini(message: str, memory: dict | None, language: str | None = None) -> dict:
     if os.environ.get("AI_PARSER_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
         return {}
-    api_key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip().strip('"').strip("'")
+    # Official docs default to GEMINI_API_KEY, but allow GOOGLE_API_KEY as well.
+    # If both are set, prefer GOOGLE_API_KEY.
+    api_key = _clean_api_key(os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY") or "")
     if not api_key:
         return {}
 
     model = os.environ.get("GEMINI_PARSER_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
     timeout = float(os.environ.get("AI_PARSER_TIMEOUT", "4") or 4)
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    debug = os.environ.get("AI_PARSER_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
     current_context = {
         "district": (memory or {}).get("district"),
         "crop": (memory or {}).get("crop"),
@@ -1420,26 +1511,11 @@ def _parse_query_with_gemini(message: str, memory: dict | None, language: str | 
         "query_language_hint": language or "",
         "query": message,
     }
-    body = {
-        "contents": [{"parts": [{"text": json.dumps(prompt, ensure_ascii=False)}]}],
-        "generationConfig": {
-            "temperature": 0,
-            "maxOutputTokens": 220,
-            "responseMimeType": "application/json",
-        },
-    }
     try:
-        req = Request(
-            endpoint,
-            data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urlopen(req, timeout=timeout) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        text = payload["candidates"][0]["content"]["parts"][0].get("text", "{}")
-        raw = json.loads(text)
+        raw = _gemini_generate_structured_json(model, api_key, prompt, timeout) or {}
     except (HTTPError, URLError, TimeoutError, KeyError, IndexError, ValueError, json.JSONDecodeError, OSError):
+        if debug:
+            print("[agent] Gemini parser failed; falling back to local parser.")
         return {}
 
     parsed = {
@@ -1483,6 +1559,13 @@ def _exact_district(name: str | None) -> str | None:
 def _extract_district(query: str) -> str | None:
     if not de.ALL_DISTRICTS:
         return None
+
+    # Tamil alias match (covers most UI queries without requiring Gemini).
+    for tamil, english in TAMIL_DISTRICT_ALIASES.items():
+        variants = [tamil, f"{tamil}இல்", f"{tamil}ல்", f"{tamil}யில்", f"{tamil}க்கு", f"{tamil}உக்கு"]
+        if any(v in query for v in variants):
+            return english
+
     ql = query.lower()
     matches = [(d, len(d)) for d in de.ALL_DISTRICTS if d.lower() in ql]
     if matches:
@@ -1510,7 +1593,7 @@ def _extract_district(query: str) -> str | None:
 def _extract_soil(query: str) -> str | None:
     ql = query.lower()
     for soil, keywords in SOIL_KEYWORDS.items():
-        if any(re.search(rf"\b{re.escape(kw)}\b", ql) for kw in keywords):
+        if any((kw in ql) or re.search(rf"\b{re.escape(kw)}\b", ql) for kw in keywords):
             return soil
     return None
 
@@ -1611,6 +1694,8 @@ def _detect_intent(query: str) -> str:
     ql = query.lower().strip()
     if re.search(r"\bwhat if\b|\bsuppose\b|\bsimulate\b", ql):
         return "whatif"
+    if re.search(r"(water\s*scarcity|drought|low\s*water|less\s*water|தண்ணீர்\s*குறைவு|குறைந்த\s*தண்ணீர்|குறைந்த\s*நீர்|குறைந்த\s*நீரில்|வறட்சி)", ql):
+        return "multi_criteria"
     scores = {}
     for intent, patterns in INTENT_PATTERNS.items():
         score = sum(1 for p in patterns if re.search(p, ql))
@@ -1885,14 +1970,23 @@ def _fallback_router(message: str, district: str, soil: str, season: str, crop: 
     elif intent == "profit_estimate":
         district = district or "Coimbatore"
         crop = crop or "rice"
-    elif intent == "multi_criteria":
-        district = district or "Coimbatore"
 
     new_memory = _merge_memory(memory, district=district, soil=soil, season=season, month=month, crop=crop)
     if ignored_memory_crop:
         new_memory["crop"] = None
     ctx = {"district": district, "soil": soil, "season": season, "month": month, "crop": crop}
     response_data = {}
+
+    if intent == "multi_criteria" and not district:
+        text = (
+            "With limited water availability, these crops are usually more water-efficient:\n\n"
+            "- Millets (sorghum/jowar, bajra, ragi)\n"
+            "- Pulses (green gram, black gram)\n"
+            "- Groundnut\n"
+            "- Sesame\n\n"
+            "Share your **district** and **season** (and soil type if known) for a more precise recommendation."
+        )
+        return {"text": _ensure_followup_chips(text, intent, ctx), "intent": intent, "district": None, "memory": new_memory}
 
     district_required = {"crop_recommend", "rainfall_info", "wage_info", "irrigation_info", "yield_trend", "pest_risk", "district_overview", "suitability", "cost_estimate", "whatif", "multi_criteria", "yield_predict", "pest_predict"}
     crop_required = {"suitability", "cost_estimate", "whatif", "fertilizer_recommendation", "yield_predict", "pest_predict", "yield_trend"}
@@ -2043,9 +2137,40 @@ def process_query(message: str, history: list = None, language: str | None = Non
         return finalize({"text": WELCOME_TEXT, "intent": "greeting", "district": None, "memory": blank_mem})
 
     memory = _get_memory(history)
-    ai_parse = _parse_query_with_gemini(original_message, memory, language)
-    if ai_parse:
-        parser_source = "gemini"
+
+    # Use Gemini only when the local parser can't understand the query well enough.
+    # This keeps latency and API usage low while still improving intent/entity extraction for hard queries.
+    local_intent = _detect_intent(message)
+    local_entities = {
+        "district": _extract_district(message),
+        "crop": _extract_crop(message),
+        "soil": _extract_soil(message),
+        "month": _extract_month(message),
+        "season": _extract_season(message),
+    }
+
+    # If the intent implies required entities but we couldn't extract them locally,
+    # treat it as "not understandable" and use Gemini to recover.
+    district_required = {
+        "crop_recommend", "rainfall_info", "wage_info", "irrigation_info", "yield_trend",
+        "pest_risk", "district_overview", "suitability", "cost_estimate", "whatif",
+        "multi_criteria", "yield_predict", "pest_predict", "profit_estimate",
+    }
+    crop_required = {
+        "suitability", "cost_estimate", "whatif", "fertilizer_recommendation",
+        "yield_predict", "pest_predict", "yield_trend", "planting_time",
+        "best_district_for_crop", "profit_estimate",
+    }
+    district_missing = local_intent in district_required and not (local_entities.get("district") or memory.get("district"))
+    crop_missing = local_intent in crop_required and not (local_entities.get("crop") or memory.get("crop"))
+    should_use_gemini = (local_intent == "general" and not any(local_entities.values())) or district_missing or crop_missing
+
+    ai_parse: dict = {}
+    if should_use_gemini:
+        ai_parse = _parse_query_with_gemini(original_message, memory, language)
+        if ai_parse:
+            parser_source = "gemini"
+
     parsed_intent = ai_parse.get("intent")
     if parsed_intent == "general":
         parsed_intent = None
@@ -2061,11 +2186,11 @@ def process_query(message: str, history: list = None, language: str | None = Non
             "memory": new_memory,
         })
 
-    quick_district = ai_parse.get("district") or _extract_district(message)
-    quick_soil = ai_parse.get("soil") or _extract_soil(message)
-    quick_month = ai_parse.get("month") or _extract_month(message)
-    quick_season = ai_parse.get("season") or _extract_season(message)
-    quick_crop = ai_parse.get("crop") or _extract_crop(message)
+    quick_district = ai_parse.get("district") or local_entities.get("district")
+    quick_soil = ai_parse.get("soil") or local_entities.get("soil")
+    quick_month = ai_parse.get("month") or local_entities.get("month")
+    quick_season = ai_parse.get("season") or local_entities.get("season")
+    quick_crop = ai_parse.get("crop") or local_entities.get("crop")
 
     district = quick_district or memory.get("district")
     soil = quick_soil or memory.get("soil")
@@ -2084,7 +2209,7 @@ def process_query(message: str, history: list = None, language: str | None = Non
     if any(re.search(p, ql) for p in GREETING_PATTERNS):
         return finalize({"text": WELCOME_TEXT, "intent": "greeting", "district": district, "memory": new_memory})
 
-    detected_intent = parsed_intent or _detect_intent(message)
+    detected_intent = parsed_intent or local_intent
     if detected_intent == "general" and any([quick_district, quick_crop, quick_soil, quick_season, quick_month]):
         text = _describe_context_update(new_memory)
         return finalize({

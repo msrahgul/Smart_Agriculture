@@ -47,7 +47,15 @@ pip install -r requirements.txt
 
 ### Environment Variables
 
-Create a `.env` file in the root directory. Configure necessary keys if your agent relies on external APIs (e.g., Gemini API key) or custom configurations.
+Create a `.env` file in the root directory (recommended: copy from `.env.example`). Configure necessary keys if your agent relies on external APIs.
+
+#### Gemini (Query Understanding)
+
+This project can optionally use the **Gemini API** to parse user queries into structured fields (intent, district, crop, soil, season, month) for better query understanding.
+
+- Set `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) in `.env`
+- Keep `AI_PARSER_ENABLED=true` (set `false` to force local parsing only)
+- Optional: `AI_PARSER_DEBUG=true` to print parser errors in the server console
 
 ### Running the Application
 
@@ -57,6 +65,16 @@ python app.py
 ```
 
 The application will be accessible at `http://127.0.0.1:5000/`.
+
+#### Windows (recommended)
+Run the server explicitly using the venv interpreter to avoid dependency/version mismatches (TensorFlow/Protobuf especially):
+```powershell
+.\run_server.ps1
+```
+If your system blocks scripts, run:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_server.ps1
+```
 
 1. Access the web interface in your browser.
 2. Upload an image of the soil if prompted.

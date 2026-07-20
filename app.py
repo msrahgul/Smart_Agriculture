@@ -7,14 +7,15 @@ from flask import Flask, request, jsonify, render_template
 import os
 import uuid
 import tempfile
+import sys
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import urlopen
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
-from PIL import Image
 import numpy as np
+import cv2
 
 import data_engine as de
 import agent
@@ -111,6 +112,7 @@ DISTRICT_TEMP_BASE = {
 de.load_data()
 ml_models.load_models()
 _classify_soil = None
+_soil_classifier_error = None
 
 
 def allowed_image_file(filename: str) -> bool:
@@ -118,7 +120,7 @@ def allowed_image_file(filename: str) -> bool:
 
 
 def _load_soil_classifier():
-    global _classify_soil
+    global _classify_soil, _soil_classifier_error
     try:
         from soil_classifier import classify_soil
         _classify_soil = classify_soil
@@ -126,19 +128,48 @@ def _load_soil_classifier():
             temp_path = tmp.name
         try:
             dummy = np.zeros((224, 224, 3), dtype=np.uint8)
-            Image.fromarray(dummy).save(temp_path)
+            cv2.imwrite(temp_path, dummy)
             _classify_soil(temp_path)
             print("[app] Soil classifier loaded and warmed up.")
+            _soil_classifier_error = None
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
     except Exception as e:
-        print(f"[app] WARNING: Soil classifier could not be loaded: {e}")
+        diag = _runtime_diagnostics()
+        py = diag.get("python_executable")
+        pb = diag.get("protobuf_version") or diag.get("protobuf_version_error")
+        tfv = diag.get("tensorflow_version") or diag.get("tensorflow_version_error")
+        _soil_classifier_error = f"{type(e).__name__}: {e} | python={py} protobuf={pb} tensorflow={tfv}"
+        print(f"[app] WARNING: Soil classifier could not be loaded: {_soil_classifier_error}")
         _classify_soil = None
 
 
 def _get_soil_classifier():
     return _classify_soil
+
+
+def _runtime_diagnostics() -> dict:
+    info = {
+        "python_executable": sys.executable,
+        "python_version": sys.version.split(" ", 1)[0],
+    }
+
+    try:
+        import google.protobuf  # type: ignore
+
+        info["protobuf_version"] = getattr(google.protobuf, "__version__", None)
+    except Exception as e:
+        info["protobuf_version_error"] = f"{type(e).__name__}: {e}"
+
+    try:
+        import tensorflow as tf  # type: ignore
+
+        info["tensorflow_version"] = getattr(tf, "__version__", None)
+    except Exception as e:
+        info["tensorflow_version_error"] = f"{type(e).__name__}: {e}"
+
+    return info
 
 
 def _trim_history(history: list, limit: int = 50) -> list:
@@ -161,6 +192,8 @@ def health():
         "yield_model_loaded": ml_models.models_available()["yield_model"],
         "pest_model_loaded": ml_models.models_available()["pest_risk_model"],
         "soil_classifier_loaded": _get_soil_classifier() is not None,
+        "soil_classifier_error": _soil_classifier_error,
+        "runtime": _runtime_diagnostics(),
     })
 
 
@@ -541,7 +574,10 @@ def soil():
     try:
         classify = _get_soil_classifier()
         if classify is None:
-            return jsonify({"error": "மண் வகைப்படுத்தும் மாதிரி கிடைக்கவில்லை." if language.startswith("ta") else "Soil classifier model not available."}), 503
+            payload = {"error": "மண் வகைப்படுத்தும் மாதிரி கிடைக்கவில்லை." if language.startswith("ta") else "Soil classifier model not available."}
+            if (not language.startswith("ta")) and _soil_classifier_error:
+                payload["detail"] = _soil_classifier_error
+            return jsonify(payload), 503
         soil_type = classify(str(filepath))
         district_input = (request.form.get("district") or "").strip()
         district = de.fuzzy_district(district_input) if district_input else None

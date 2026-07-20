@@ -1293,7 +1293,8 @@ async function analyzeSoilImage(file) {
     if (data.memory) updateContextUI(data.memory);
     if (soilPreviewName) soilPreviewName.textContent = data.soil_type ? `Detected: ${data.soil_type}` : `Could not analyze ${file.name}`;
     hideTyping();
-    renderMessage(data.error ? `❌ ${data.error}` : data.text, 'bot');
+    const err = data.error ? (data.detail ? `${data.error}\n(${data.detail})` : data.error) : null;
+    renderMessage(err ? `❌ ${err}` : data.text, 'bot');
   } catch (_) {
     if (soilPreviewName) soilPreviewName.textContent = `Upload failed: ${file.name}`;
     hideTyping();
