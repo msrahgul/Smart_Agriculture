@@ -3,7 +3,7 @@
 app.py – Smart Farming AI Agent: Flask Server
 """
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, Response, stream_with_context
 import os
 import uuid
 import tempfile
@@ -21,6 +21,35 @@ import data_engine as de
 import agent
 import ml_models
 import nlg
+
+# ── Market-price CSV cache ─────────────────────────────────────────────
+_price_df = None
+_PRICE_CSV = Path(__file__).resolve().parent / "data" / "market_prices.csv"
+
+def _load_price_df():
+    """Load (or return cached) market_prices.csv as a list of dicts."""
+    global _price_df
+    if _price_df is not None:
+        return _price_df
+    if not _PRICE_CSV.exists():
+        return []
+    import csv
+    rows = []
+    with open(_PRICE_CSV, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            rows.append(row)
+    _price_df = rows
+    print(f"[app] Loaded {len(rows)} market-price records from {_PRICE_CSV}")
+    return _price_df
+
+def _parse_date(s):
+    """Parse dd/mm/yyyy → comparable string yyyy-mm-dd (for max comparison)."""
+    try:
+        d, m, y = s.strip().split("/")
+        return f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+    except Exception:
+        return s
 
 load_dotenv()
 
@@ -177,6 +206,38 @@ def _trim_history(history: list, limit: int = 50) -> list:
 
 
 _load_soil_classifier()
+
+
+def _warmup_llm_models():
+    """
+    Pre-load both Ollama models into memory so the first user chat request
+    doesn't pay a 40–55 s cold-start penalty.
+    Runs in a background thread — does NOT block Flask startup.
+    """
+    import threading
+
+    def _do_warmup():
+        try:
+            from llm_client import router_llm, prose_llm
+            # Tiny no-op prompts — just enough to load weights into RAM/VRAM.
+            router_llm.chat(
+                [{"role": "user", "content": "ping"}],
+                num_predict=1, temperature=0.0,
+            )
+            prose_llm.chat(
+                [{"role": "user", "content": "ping"}],
+                num_predict=1, temperature=0.0,
+            )
+            print("[app] LLM models pre-warmed and ready.")
+        except Exception as e:
+            print(f"[app] LLM warmup skipped (Ollama not ready yet): {e}")
+
+    t = threading.Thread(target=_do_warmup, daemon=True)
+    t.start()
+
+
+_warmup_llm_models()
+
 
 
 @app.route("/")
@@ -517,6 +578,63 @@ def chat():
     })
 
 
+@app.route("/chat_stream", methods=["POST"])
+def chat_stream():
+    """
+    Streaming SSE endpoint.  Tokens are pushed as Server-Sent Events so the
+    browser can render them progressively (typewriter effect).
+
+    Event format:
+        data: {"type": "token",  "token": "<text chunk>"}\n\n
+        data: {"type": "done",   "session_id": "...", "district": "...", "memory": {...}}\n\n
+        data: {"type": "error",  "message": "..."}\n\n
+    """
+    import json as _json
+
+    data = request.get_json(silent=True) or {}
+    message    = (data.get("message")    or "").strip()
+    session_id = (data.get("session_id") or "").strip() or str(uuid.uuid4())
+    language   = (data.get("language")   or "en").strip().lower()
+
+    if session_id not in conversation_store:
+        conversation_store[session_id] = []
+
+    history = conversation_store[session_id]
+
+    def _generate():
+        full_text = []
+        try:
+            token_gen, new_memory, meta = agent.process_query_stream(
+                message, history, language=language
+            )
+            for token in token_gen:
+                full_text.append(token)
+                yield f"data: {_json.dumps({'type': 'token', 'token': token})}\n\n"
+
+            # Persist to conversation store
+            assembled = "".join(full_text)
+            hist = [item for item in history if item.get("role") != "system_memory"]
+            if new_memory:
+                hist.append({"role": "system_memory", "memory": new_memory})
+            hist.append({"role": "user", "text": message})
+            hist.append({"role": "bot",  "text": assembled})
+            conversation_store[session_id] = _trim_history(hist)
+
+            yield f"data: {_json.dumps({'type': 'done', 'session_id': session_id, 'district': meta.get('district'), 'memory': new_memory})}\n\n"
+
+        except Exception as exc:  # noqa: BLE001
+            yield f"data: {_json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+
+    return Response(
+        stream_with_context(_generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # disables Nginx buffering if behind a proxy
+        },
+    )
+
+
 @app.route("/set_context", methods=["POST"])
 def set_context():
     data = request.get_json(silent=True) or {}
@@ -634,6 +752,79 @@ def reset_session():
     if session_id and session_id in conversation_store:
         del conversation_store[session_id]
     return jsonify({"ok": True})
+
+
+@app.route("/api/price_commodities", methods=["GET"])
+def api_price_commodities():
+    """Return sorted distinct commodities (and states) for the price UI dropdowns."""
+    rows = _load_price_df()
+    commodities = sorted({r.get("commodity", "").strip() for r in rows if r.get("commodity", "").strip()})
+    states = sorted({r.get("state", "").strip() for r in rows if r.get("state", "").strip()})
+    districts = sorted({r.get("district", "").strip() for r in rows if r.get("district", "").strip()})
+    return jsonify({"commodities": commodities, "states": states, "districts": districts})
+
+
+@app.route("/api/price", methods=["GET"])
+def api_price():
+    """
+    Query latest market price from the cached CSV.
+    Params: commodity (required), state (optional), district (optional), market (optional)
+    Returns the record(s) with the latest arrival_date matching the filter.
+    Also supports ?refresh=1 to force re-read the CSV from disk.
+    """
+    if request.args.get("refresh"):
+        global _price_df
+        _price_df = None
+
+    commodity = (request.args.get("commodity") or "").strip().lower()
+    state      = (request.args.get("state")     or "").strip().lower()
+    district   = (request.args.get("district")  or "").strip().lower()
+    market     = (request.args.get("market")    or "").strip().lower()
+
+    if not commodity:
+        return jsonify({"error": "commodity parameter is required"}), 400
+
+    rows = _load_price_df()
+    if not rows:
+        return jsonify({"error": "Market price data not available. Run pull_agmarknet_prices.py first."}), 503
+
+    # Filter
+    filtered = [
+        r for r in rows
+        if commodity in r.get("commodity", "").lower()
+        and (not state    or state    in r.get("state",    "").lower())
+        and (not district or district in r.get("district", "").lower())
+        and (not market   or market   in r.get("market",   "").lower())
+    ]
+
+    if not filtered:
+        return jsonify({"error": f"No price data found for '{commodity}'. Try a different commodity or remove filters."}), 404
+
+    # Pick the most recent arrival_date
+    latest_date = max(_parse_date(r.get("arrival_date", "")) for r in filtered)
+    latest_rows = [r for r in filtered if _parse_date(r.get("arrival_date", "")) == latest_date]
+
+    # Convert numeric fields
+    def _safe_int(v):
+        try: return int(v)
+        except: return v
+
+    result = []
+    for r in latest_rows:
+        result.append({
+            "state":        r.get("state", ""),
+            "district":     r.get("district", ""),
+            "market":       r.get("market", ""),
+            "commodity":    r.get("commodity", ""),
+            "variety":      r.get("variety", ""),
+            "grade":        r.get("grade", ""),
+            "arrival_date": r.get("arrival_date", ""),
+            "min_price":    _safe_int(r.get("min_price", "")),
+            "max_price":    _safe_int(r.get("max_price", "")),
+            "modal_price":  _safe_int(r.get("modal_price", "")),
+        })
+
+    return jsonify({"count": len(result), "arrival_date": latest_date, "records": result})
 
 
 if __name__ == "__main__":

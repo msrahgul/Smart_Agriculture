@@ -1,119 +1,162 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Smart-Agri AI — Main Script (Clean, Professional, Active Context Synced)
+   ═══════════════════════════════════════════════════════════════════ */
 
-let SESSION_ID = localStorage.getItem('sf_session') || null;
+'use strict';
+
+// ── State ─────────────────────────────────────────────────────────────
+let SESSION_ID  = localStorage.getItem('sf_session') || null;
 let activeContext = { district: null, soil: null, season: null, month: null, crop: null };
-let isProcessing = false;
-
-const messagesList = document.getElementById('messagesList');
-const messagesWrap = document.getElementById('messagesWrap');
-const chatInput = document.getElementById('chatInput');
-const sendBtn = document.getElementById('sendBtn');
-const voiceInputBtn = document.getElementById('voiceInputBtn');
-const voiceStatus = document.getElementById('voiceStatus');
-const languageToggle = document.getElementById('languageToggle');
-const clearChatBtn = document.getElementById('clearChat');
-const sidebarToggle = document.getElementById('sidebarToggle');
-const sidebar = document.querySelector('.sidebar');
-const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-const soilImageInput = document.getElementById('soilImageInput');
-const soilStrip = document.getElementById('soilPreviewStrip');
-const soilPreviewImg = document.getElementById('soilPreviewImg');
-const soilPreviewName = document.getElementById('soilPreviewName');
-const removeImgBtn = document.getElementById('removeImgBtn');
-const ttsBtnGlobal = document.getElementById('ttsBtnGlobal');
-const ctxCrop = document.getElementById('ctxCrop');
-const ctxDistrict = document.getElementById('ctxDistrict');
-const ctxSoil = document.getElementById('ctxSoil');
-const ctxMonth = document.getElementById('ctxMonth');
-const ctxSeason = document.getElementById('ctxSeason');
-const topCtxCrop = document.getElementById('topCtxCrop');
-const topCtxDistrict = document.getElementById('topCtxDistrict');
-const weatherEmpty = document.getElementById('weatherEmpty');
-const weatherContent = document.getElementById('weatherContent');
-const weatherDistrict = document.getElementById('weatherDistrict');
-const weatherTemp = document.getElementById('weatherTemp');
-const weatherCondition = document.getElementById('weatherCondition');
-const weatherHumidity = document.getElementById('weatherHumidity');
-const weatherRain = document.getElementById('weatherRain');
-const weatherWind = document.getElementById('weatherWind');
-const weatherHourly = document.getElementById('weatherHourly');
-const weatherDaily = document.getElementById('weatherDaily');
-const weatherSource = document.querySelector('.weather-source');
-const whatifIrrSlider = document.getElementById('whatifIrrSlider');
-const whatifRainSlider = document.getElementById('whatifRainSlider');
-const whatifIrrVal = document.getElementById('whatifIrrVal');
-const whatifRainVal = document.getElementById('whatifRainVal');
-const whatifFertSlider = document.getElementById('whatifFertSlider');
-const whatifTempSlider = document.getElementById('whatifTempSlider');
-const whatifPestSlider = document.getElementById('whatifPestSlider');
-const whatifMoistureSlider = document.getElementById('whatifMoistureSlider');
-const whatifFertVal = document.getElementById('whatifFertVal');
-const whatifTempVal = document.getElementById('whatifTempVal');
-const whatifPestVal = document.getElementById('whatifPestVal');
-const whatifMoistureVal = document.getElementById('whatifMoistureVal');
-const simulateBtn = document.getElementById('simulateBtn');
-const manualCrop = document.getElementById('manualCrop');
-const manualDistrict = document.getElementById('manualDistrict');
-const manualSoil = document.getElementById('manualSoil');
-const manualMonth = document.getElementById('manualMonth');
-const manualSeason = document.getElementById('manualSeason');
-const applyContextBtn = document.getElementById('applyContextBtn');
-const resetContextBtn = document.getElementById('resetContextBtn');
-const inputCard = document.querySelector('.input-card');
-const chatMenuBtn = document.getElementById('chatMenuBtn');
-const chatMenuPanel = document.getElementById('chatMenuPanel');
-let lastWeatherDistrict = null;
-let weatherRequestId = 0;
-let latestWeatherData = null;
-
-function setChatMenuOpen(open) {
-  if (!chatMenuBtn || !chatMenuPanel) return;
-  chatMenuPanel.hidden = !open;
-  chatMenuBtn.classList.toggle('menu-open', Boolean(open));
-  chatMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-}
-
-let APP_LANGUAGE = localStorage.getItem('sf_language') || 'en';
+let isProcessing  = false;
+let APP_LANGUAGE  = localStorage.getItem('sf_language') || 'en';
 if (!['en', 'ta'].includes(APP_LANGUAGE)) APP_LANGUAGE = APP_LANGUAGE.startsWith('ta') ? 'ta' : 'en';
 
-const INTRO_MESSAGE = `🤖 I'm your Smart Farming AI for Tamil Nadu, and I'm here to help with agriculture questions.\n\nTry one of these examples:`;
-const INTRO_MESSAGE_TA = `🤖 நான் தமிழ்நாட்டிற்கான Smart Farming AI. வேளாண்மை கேள்விகளுக்கு உதவ தயாராக இருக்கிறேன்.\n\nஇந்த மாதிரி கேள்விகளை முயற்சி செய்யலாம்:`;
+// ── DOM refs ──────────────────────────────────────────────────────────
+const messagesList   = document.getElementById('messagesList');
+const messagesWrap   = document.getElementById('messagesWrap');
+const chatInput      = document.getElementById('chatInput');
+const sendBtn        = document.getElementById('sendBtn');
+const voiceInputBtn  = document.getElementById('voiceInputBtn');
+const voiceStatus    = document.getElementById('voiceStatus');
+const languageToggle = document.getElementById('languageToggle');
+const clearChatBtn   = document.getElementById('clearChat');
+const sidebarToggle  = document.getElementById('sidebarToggle');
+const sidebar        = document.querySelector('.sidebar');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+const soilImageInput = document.getElementById('soilImageInput');
+const soilStrip      = document.getElementById('soilPreviewStrip');
+const soilPreviewName = document.getElementById('soilPreviewName');
+const removeImgBtn   = document.getElementById('removeImgBtn');
+
+// Context display
+const ctxCrop     = document.getElementById('ctxCrop');
+const ctxDistrict = document.getElementById('ctxDistrict');
+const ctxSoil     = document.getElementById('ctxSoil');
+const ctxMonth    = document.getElementById('ctxMonth');
+const ctxSeason   = document.getElementById('ctxSeason');
+const topCtxCropLabel     = document.getElementById('topCtxCropLabel');
+const topCtxDistrictLabel = document.getElementById('topCtxDistrictLabel');
+
+// Weather
+const weatherEmpty    = document.getElementById('weatherEmpty');
+const weatherContent  = document.getElementById('weatherContent');
+const weatherDistrict = document.getElementById('weatherDistrict');
+const weatherTemp     = document.getElementById('weatherTemp');
+const weatherCondition = document.getElementById('weatherCondition');
+const weatherHumidity = document.getElementById('weatherHumidity');
+const weatherRain     = document.getElementById('weatherRain');
+const weatherWind     = document.getElementById('weatherWind');
+const weatherHourly   = document.getElementById('weatherHourly');
+const weatherDaily    = document.getElementById('weatherDaily');
+const weatherSource   = document.querySelector('.weather-source');
+
+// What-if
+const whatifIrrSlider      = document.getElementById('whatifIrrSlider');
+const whatifRainSlider     = document.getElementById('whatifRainSlider');
+const whatifFertSlider     = document.getElementById('whatifFertSlider');
+const whatifTempSlider     = document.getElementById('whatifTempSlider');
+const whatifPestSlider     = document.getElementById('whatifPestSlider');
+const whatifMoistureSlider = document.getElementById('whatifMoistureSlider');
+const whatifIrrVal         = document.getElementById('whatifIrrVal');
+const whatifRainVal        = document.getElementById('whatifRainVal');
+const whatifFertVal        = document.getElementById('whatifFertVal');
+const whatifTempVal        = document.getElementById('whatifTempVal');
+const whatifPestVal        = document.getElementById('whatifPestVal');
+const whatifMoistureVal    = document.getElementById('whatifMoistureVal');
+const simulateBtn          = document.getElementById('simulateBtn');
+
+// Manual context
+const manualCrop      = document.getElementById('manualCrop');
+const manualDistrict  = document.getElementById('manualDistrict');
+const manualSoil      = document.getElementById('manualSoil');
+const manualMonth     = document.getElementById('manualMonth');
+const manualSeason    = document.getElementById('manualSeason');
+const applyContextBtn = document.getElementById('applyContextBtn');
+const resetContextBtn = document.getElementById('resetContextBtn');
+
+// Weather state
+let lastWeatherDistrict = null;
+let weatherRequestId    = 0;
+let latestWeatherData   = null;
+
+// Voice input state
+let recognition          = null;
+let isListening          = false;
+let stopVoiceRequested   = false;
+let voiceTranscript      = '';
+let voiceAutoStopTimer   = null;
+let recognitionLangInUse = null;
+let recognitionFallbackTimer = null;
+let recognitionStartTimer    = null;
+
+// ── Welcome Content ────────────────────────────────────────────────────
+const INTRO_MESSAGE = `I'm your **Smart Farming AI** for Tamil Nadu — ask me anything about crops, soil, pest risks, rainfall, or farm economics.\n\nTry one of these:`;
+const INTRO_MESSAGE_TA = `நான் தமிழ்நாட்டிற்கான **Smart Farming AI** — பயிர்கள், மண், பூச்சி அபாயம், மழை அல்லது வேளாண் பொருளாதாரம் பற்றி கேளுங்கள்.\n\nமுயற்சி செய்யலாம்:`;
 
 const WELCOME_QUERIES = [
   'Best crops for Madurai with red soil during Kharif?',
   'How much rainfall does Coimbatore receive?',
-  'Pest risks in Dharmapuri?',
-  'Overview of Erode district?'
+  'Pest risk for rice in Dharmapuri?',
+  'Overview of Erode district agriculture',
 ];
-
 const WELCOME_QUERIES_TA = [
   'மதுரையில் சிவப்பு மண்ணில் காரிஃப் பருவத்திற்கு சிறந்த பயிர்கள்?',
   'கோயம்புத்தூர் மழை அளவு என்ன?',
-  'தர்மபுரியில் பூச்சி அபாயம் என்ன?',
-  'ஈரோடு மாவட்ட விவரம் சொல்லுங்கள்'
+  'தர்மபுரியில் நெல்லுக்கு பூச்சி அபாயம் என்ன?',
+  'ஈரோடு மாவட்ட வேளாண்மை விவரம்',
 ];
 
-let ttsEnabled = false;
-let currentUtterance = null;
-let speechQueue = [];
-let preferredVoice = null;
-let currentSpeechLang = 'en-IN';
-let speechWatchdog = null;
-let speechKeepAlive = null;
-let speechRunId = 0;
-let recognition = null;
-let isListening = false;
-let stopVoiceRequested = false;
-let voiceTranscript = '';
-let voiceAutoStopTimer = null;
-let recognitionLangInUse = null;
-let recognitionFallbackTimer = null;
-let recognitionStartTimer = null;
+// ── UI Text ────────────────────────────────────────────────────────────
+const UI_TEXT = {
+  en: {
+    chatPlaceholder: 'Ask about crops, rainfall, fertilizer, pest risks...',
+    voiceFooter:     'Smart Farming AI · Tamil Nadu · Context-aware agricultural assistant',
+    manualUpdated:   '✅ Context updated.',
+    noDistrict:      '⚠️ Set a district first, then run the simulation.',
+    noSpeech:        'No speech detected. Tap the mic and try again.',
+    listening:       'Listening… speak your question.',
+    voiceSending:    'Sending voice input…',
+    voiceStopped:    'Voice input stopped.',
+    voiceTryAgain:   'Could not start voice input. Please try again.',
+    micPermission:   'Microphone access was blocked.',
+    heard:           t => `Heard: ${t}`,
+    weatherEmpty:    'Ask about a district to load weather.',
+  },
+  ta: {
+    chatPlaceholder: 'பயிர், மழை, உரம், பூச்சி அபாயம் பற்றி கேளுங்கள்...',
+    voiceFooter:     'தமிழ்நாடு ஸ்மார்ட் வேளாண்மை AI · சூழல் சார்ந்த உதவியாளர்',
+    manualUpdated:   '✅ சூழல் புதுப்பிக்கப்பட்டது.',
+    noDistrict:      '⚠️ முதலில் மாவட்டத்தை அமைக்கவும்.',
+    noSpeech:        'பேச்சு கண்டறியப்படவில்லை. மீண்டும் முயற்சிக்கவும்.',
+    listening:       'கேட்கிறது… உங்கள் கேள்வியை பேசுங்கள்.',
+    voiceSending:    'குரல் கேள்வி அனுப்பப்படுகிறது…',
+    voiceStopped:    'குரல் உள்ளீடு நிறுத்தப்பட்டது.',
+    voiceTryAgain:   'குரல் உள்ளீடு தொடங்க முடியவில்லை.',
+    micPermission:   'மைக்ரோஃபோன் அனுமதி தடுக்கப்பட்டுள்ளது.',
+    heard:           t => `கேட்டது: ${t}`,
+    weatherEmpty:    'மாவட்டத்தைப் பற்றி கேட்டு வானிலை ஏற்றவும்.',
+  }
+};
 
-function prettyContextValue(value) {
-  if (!value) return '—';
-  return String(value).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+function t(key) { return (UI_TEXT[APP_LANGUAGE] || UI_TEXT.en)[key] || UI_TEXT.en[key] || key; }
+
+// ── Helpers ────────────────────────────────────────────────────────────
+function getTime() {
+  return new Date().toLocaleTimeString(APP_LANGUAGE === 'ta' ? 'ta-IN' : 'en-IN', { hour: '2-digit', minute: '2-digit' });
 }
 
+function prettyValue(v) {
+  if (!v) return '—';
+  return String(v).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function setVoiceStatus(msg, isError = false) {
+  if (!voiceStatus) return;
+  voiceStatus.textContent = msg || t('voiceFooter');
+  voiceStatus.classList.toggle('voice-error', Boolean(isError));
+}
+
+// ── Season/Month sync ──────────────────────────────────────────────────
 function monthToSeason(month) {
   const m = String(month || '').toLowerCase();
   if (['june','july','august','september'].includes(m)) return 'Kharif';
@@ -122,165 +165,62 @@ function monthToSeason(month) {
   if (['december','january','february'].includes(m)) return 'Winter';
   return '';
 }
-
 function seasonToDefaultMonth(season) {
   const s = String(season || '').toLowerCase();
   if (s === 'winter') return 'January';
   if (s === 'summer') return 'April';
   if (s === 'kharif') return 'July';
   if (s === 'rabi') return 'November';
-  if (s === 'autumn') return 'October';
-  if (s === 'whole year') return 'April';
   return '';
 }
-
 function isMonthInSeason(month, season) {
-  if (!month || !season) return true;
-  if (season === 'Whole Year') return true;
+  if (!month || !season || season === 'Whole Year') return true;
   return monthToSeason(month) === season;
 }
-
 function syncSeasonFromMonth() {
   if (!manualMonth || !manualSeason) return;
-  const nextSeason = monthToSeason(manualMonth.value);
-  if (nextSeason) manualSeason.value = nextSeason;
+  const s = monthToSeason(manualMonth.value);
+  if (s) manualSeason.value = s;
 }
-
 function syncMonthFromSeason() {
   if (!manualMonth || !manualSeason) return;
   const season = manualSeason.value;
   if (!season) return;
-  if (!manualMonth.value || !isMonthInSeason(manualMonth.value, season)) {
+  if (!manualMonth.value || !isMonthInSeason(manualMonth.value, season))
     manualMonth.value = seasonToDefaultMonth(season);
-  }
 }
-
 function syncManualContextInputs() {
-  if (manualCrop) manualCrop.value = activeContext.crop || '';
+  if (manualCrop)     manualCrop.value     = activeContext.crop     || '';
   if (manualDistrict) manualDistrict.value = activeContext.district || '';
-  if (manualSoil) manualSoil.value = activeContext.soil || '';
-  if (manualMonth) manualMonth.value = activeContext.month || '';
-  if (manualSeason) manualSeason.value = activeContext.season || '';
+  if (manualSoil)     manualSoil.value     = activeContext.soil     || '';
+  if (manualMonth)    manualMonth.value    = activeContext.month    || '';
+  if (manualSeason)   manualSeason.value   = activeContext.season   || '';
 }
 
+// ── Context UI Updates (Triggered automatically whenever context changes) ──
 function updateContextUI(memory = {}) {
-  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
-  const previousDistrict = activeContext.district;
+  const prevDistrict = activeContext.district;
   activeContext = { ...activeContext, ...memory };
-  if (ctxCrop) ctxCrop.textContent = prettyContextValue(activeContext.crop);
-  if (ctxDistrict) ctxDistrict.textContent = prettyContextValue(activeContext.district);
-  if (ctxSoil) ctxSoil.textContent = prettyContextValue(activeContext.soil);
-  if (ctxMonth) ctxMonth.textContent = prettyContextValue(activeContext.month);
-  if (ctxSeason) ctxSeason.textContent = prettyContextValue(activeContext.season);
-  if (topCtxCrop) topCtxCrop.textContent = `${t.cropLabel}: ${prettyContextValue(activeContext.crop)}`;
-  if (topCtxDistrict) topCtxDistrict.textContent = `${t.locationLabel}: ${prettyContextValue(activeContext.district)}`;
+
+  // Update Sidebar Active Context cards
+  if (ctxCrop)     ctxCrop.textContent     = prettyValue(activeContext.crop);
+  if (ctxDistrict) ctxDistrict.textContent = prettyValue(activeContext.district);
+  if (ctxSoil)     ctxSoil.textContent     = prettyValue(activeContext.soil);
+  if (ctxMonth)    ctxMonth.textContent    = prettyValue(activeContext.month);
+  if (ctxSeason)   ctxSeason.textContent   = prettyValue(activeContext.season);
+
+  // Update Topbar Context chips
+  if (topCtxCropLabel)     topCtxCropLabel.textContent     = activeContext.crop     ? prettyValue(activeContext.crop)     : (APP_LANGUAGE === 'ta' ? 'பயிர் அமைக்கப்படவில்லை' : 'No crop set');
+  if (topCtxDistrictLabel) topCtxDistrictLabel.textContent = activeContext.district ? prettyValue(activeContext.district) : (APP_LANGUAGE === 'ta' ? 'மாவட்டம் அமைக்கப்படவில்லை' : 'No district set');
+
   syncManualContextInputs();
   updateWhatIfLabels();
-  if (activeContext.district && activeContext.district !== previousDistrict) {
+
+  // Auto-fetch weather if district changed in conversation
+  if (activeContext.district && activeContext.district !== prevDistrict) {
     loadWeatherForDistrict(activeContext.district);
   } else if (!activeContext.district) {
     resetWeatherUI();
-  }
-}
-
-function formatWeatherNumber(value, suffix = '') {
-  if (value === null || value === undefined || value === '') return '—';
-  const number = Number(value);
-  if (Number.isNaN(number)) return '—';
-  return `${Math.round(number)}${suffix}`;
-}
-
-function formatWeatherTime(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value).slice(11, 16) || value;
-  return date.toLocaleTimeString('en-IN', { hour: 'numeric', hour12: true });
-}
-
-function formatWeatherDate(value) {
-  if (!value) return '—';
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(APP_LANGUAGE === 'ta' ? 'ta-IN' : 'en-IN', { weekday: 'short' });
-}
-
-function localizeWeatherCondition(text) {
-  if (APP_LANGUAGE !== 'ta') return text || 'Weather update';
-  const value = String(text || '').toLowerCase();
-  if (value.includes('rain')) return 'மழை வாய்ப்பு';
-  if (value.includes('clear')) return 'தெளிந்த வானம்';
-  if (value.includes('cloud')) return 'மேகமூட்டம்';
-  if (value.includes('fog')) return 'மூடுபனி';
-  if (value.includes('thunder')) return 'இடி மின்னல் வாய்ப்பு';
-  if (value.includes('offline')) return 'பருவகால வானிலை மதிப்பீடு';
-  return 'வானிலை புதுப்பிப்பு';
-}
-
-function resetWeatherUI(message = null) {
-  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
-  lastWeatherDistrict = null;
-  latestWeatherData = null;
-  if (weatherEmpty) {
-    weatherEmpty.hidden = false;
-    weatherEmpty.textContent = message || t.weatherEmpty;
-  }
-  if (weatherContent) weatherContent.hidden = true;
-}
-
-function renderWeather(data) {
-  if (!weatherContent) return;
-  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
-  latestWeatherData = data;
-  const current = data.current || {};
-  if (weatherEmpty) weatherEmpty.hidden = true;
-  weatherContent.hidden = false;
-  if (weatherDistrict) weatherDistrict.textContent = data.district || 'Weather';
-  if (weatherSource) weatherSource.textContent = data.source || 'Open-Meteo';
-  if (weatherTemp) weatherTemp.textContent = formatWeatherNumber(current.temp_c, '°C');
-  if (weatherCondition) weatherCondition.textContent = localizeWeatherCondition(current.condition);
-  if (weatherHumidity) weatherHumidity.textContent = `${t.humidityLabel} ${formatWeatherNumber(current.humidity_pct, '%')}`;
-  if (weatherRain) weatherRain.textContent = `${t.rainLabel} ${formatWeatherNumber(current.rain_mm ?? current.precipitation_mm, ' mm')}`;
-  if (weatherWind) weatherWind.textContent = `${t.windLabel} ${formatWeatherNumber(current.wind_kmh, ' km/h')}`;
-  if (weatherHourly) {
-    weatherHourly.innerHTML = '';
-    (data.hourly || []).slice(0, 4).forEach(item => {
-      const row = document.createElement('div');
-      row.className = 'weather-mini-row';
-      row.innerHTML = `<span>${formatWeatherTime(item.time)}</span><strong>${formatWeatherNumber(item.temp_c, '°')}</strong><em>${formatWeatherNumber(item.rain_probability_pct, '% rain')}</em>`;
-      weatherHourly.appendChild(row);
-    });
-  }
-  if (weatherDaily) {
-    weatherDaily.innerHTML = '';
-    (data.daily || []).slice(0, 3).forEach(item => {
-      const row = document.createElement('div');
-      row.className = 'weather-mini-row';
-      row.innerHTML = `<span>${formatWeatherDate(item.date)}</span><strong>${formatWeatherNumber(item.temp_min_c, '°')} / ${formatWeatherNumber(item.temp_max_c, '°')}</strong><em>${formatWeatherNumber(item.rain_sum_mm, ' mm')}</em>`;
-      weatherDaily.appendChild(row);
-    });
-  }
-}
-
-async function loadWeatherForDistrict(district) {
-  if (!district || district === lastWeatherDistrict) return;
-  lastWeatherDistrict = district;
-  const requestId = ++weatherRequestId;
-  if (weatherEmpty) {
-    weatherEmpty.hidden = false;
-    weatherEmpty.textContent = APP_LANGUAGE === 'ta' ? `${prettyContextValue(district)} வானிலை ஏற்றப்படுகிறது...` : `Loading weather for ${prettyContextValue(district)}...`;
-  }
-  if (weatherContent) weatherContent.hidden = true;
-  try {
-    const res = await fetch(`/weather?district=${encodeURIComponent(district)}`);
-    const data = await res.json();
-    if (requestId !== weatherRequestId) return;
-    if (!res.ok || data.error) {
-      resetWeatherUI(data.error || 'Weather is unavailable right now.');
-      return;
-    }
-    renderWeather(data);
-  } catch (_) {
-    if (requestId === weatherRequestId) resetWeatherUI('Weather is unavailable right now.');
   }
 }
 
@@ -289,36 +229,110 @@ function clearContextUI() {
   updateContextUI({});
 }
 
-async function persistManualContext(nextContext) {
-  try {
-    const res = await fetch('/set_context', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: SESSION_ID, memory: nextContext })
+// ── Weather ────────────────────────────────────────────────────────────
+const WEATHER_CODES = {
+  0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
+  45:'Fog',51:'Light drizzle',53:'Moderate drizzle',55:'Heavy drizzle',
+  61:'Slight rain',63:'Moderate rain',65:'Heavy rain',
+  80:'Slight showers',81:'Moderate showers',82:'Heavy showers',
+  95:'Thunderstorm',96:'Thunderstorm + hail',99:'Severe thunderstorm'
+};
+function weatherCodeText(code) { return WEATHER_CODES[parseInt(code)] || 'Weather update'; }
+
+function formatNum(v, suffix = '') {
+  if (v === null || v === undefined || v === '') return '—';
+  const n = Number(v);
+  return isNaN(n) ? '—' : `${Math.round(n)}${suffix}`;
+}
+function formatTime(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  return isNaN(d) ? String(v).slice(11, 16) : d.toLocaleTimeString('en-IN', { hour: 'numeric', hour12: true });
+}
+function formatDate(v) {
+  if (!v) return '—';
+  const d = new Date(`${v}T00:00:00`);
+  return isNaN(d) ? v : d.toLocaleDateString(APP_LANGUAGE === 'ta' ? 'ta-IN' : 'en-IN', { weekday: 'short' });
+}
+
+function resetWeatherUI(msg = null) {
+  lastWeatherDistrict = null; latestWeatherData = null;
+  if (weatherEmpty)  { weatherEmpty.hidden = false; weatherEmpty.textContent = msg || t('weatherEmpty'); }
+  if (weatherContent)  weatherContent.hidden = true;
+}
+
+function renderWeather(data) {
+  if (!weatherContent) return;
+  latestWeatherData = data;
+  const cur = data.current || {};
+  if (weatherEmpty)    weatherEmpty.hidden = true;
+  weatherContent.hidden = false;
+  if (weatherDistrict)  weatherDistrict.textContent  = data.district || '—';
+  if (weatherSource)    weatherSource.textContent     = data.source   || '';
+  if (weatherTemp)      weatherTemp.textContent       = formatNum(cur.temp_c, '°C');
+  if (weatherCondition) weatherCondition.textContent  = weatherCodeText(cur.weather_code ?? cur.condition);
+  if (weatherHumidity)  weatherHumidity.textContent   = `💧 ${formatNum(cur.humidity_pct, '%')}`;
+  if (weatherRain)      weatherRain.textContent       = `🌧 ${formatNum(cur.rain_mm ?? cur.precipitation_mm, ' mm')}`;
+  if (weatherWind)      weatherWind.textContent       = `💨 ${formatNum(cur.wind_kmh, ' km/h')}`;
+  if (weatherHourly) {
+    weatherHourly.innerHTML = '';
+    (data.hourly || []).slice(0, 4).forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'weather-mini-row';
+      row.innerHTML = `<span>${formatTime(item.time)}</span><strong>${formatNum(item.temp_c, '°')}</strong><em>${formatNum(item.rain_probability_pct, '% rain')}</em>`;
+      weatherHourly.appendChild(row);
     });
+  }
+  if (weatherDaily) {
+    weatherDaily.innerHTML = '';
+    (data.daily || []).slice(0, 3).forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'weather-mini-row';
+      row.innerHTML = `<span>${formatDate(item.date)}</span><strong>${formatNum(item.temp_min_c, '°')} / ${formatNum(item.temp_max_c, '°')}</strong><em>${formatNum(item.rain_sum_mm, ' mm')}</em>`;
+      weatherDaily.appendChild(row);
+    });
+  }
+}
+
+async function loadWeatherForDistrict(district) {
+  if (!district || district === lastWeatherDistrict) return;
+  lastWeatherDistrict = district;
+  const reqId = ++weatherRequestId;
+  if (weatherEmpty)  { weatherEmpty.hidden = false; weatherEmpty.textContent = `Loading weather for ${district}…`; }
+  if (weatherContent)  weatherContent.hidden = true;
+  try {
+    const res  = await fetch(`/weather?district=${encodeURIComponent(district)}`);
     const data = await res.json();
-    if (data.session_id) {
-      SESSION_ID = data.session_id;
-      localStorage.setItem('sf_session', SESSION_ID);
-    }
+    if (reqId !== weatherRequestId) return;
+    if (!res.ok || data.error) { resetWeatherUI(data.error || 'Weather unavailable.'); return; }
+    renderWeather(data);
+  } catch (_) {
+    if (reqId === weatherRequestId) resetWeatherUI('Weather unavailable right now.');
+  }
+}
+
+// ── Manual Context Actions ─────────────────────────────────────────────
+async function persistManualContext(ctx) {
+  try {
+    const res  = await fetch('/set_context', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: SESSION_ID, memory: ctx }) });
+    const data = await res.json();
+    if (data.session_id) { SESSION_ID = data.session_id; localStorage.setItem('sf_session', SESSION_ID); }
   } catch (_) {}
 }
 
 async function applyManualContext() {
-  const nextContext = {
-    crop: manualCrop.value.trim() || null,
+  const ctx = {
+    crop:     manualCrop.value.trim()     || null,
     district: manualDistrict.value.trim() || null,
-    soil: manualSoil.value || null,
-    month: manualMonth.value || null,
-    season: manualSeason.value || null,
+    soil:     manualSoil.value             || null,
+    month:    manualMonth.value            || null,
+    season:   manualSeason.value           || null,
   };
-  if (nextContext.month && !nextContext.season) nextContext.season = monthToSeason(nextContext.month);
-  if (nextContext.season && (!nextContext.month || !isMonthInSeason(nextContext.month, nextContext.season))) {
-    nextContext.month = seasonToDefaultMonth(nextContext.season) || nextContext.month;
-  }
-  updateContextUI(nextContext);
-  await persistManualContext(nextContext);
-  renderMessage((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).manualUpdated, 'bot');
+  if (ctx.month && !ctx.season) ctx.season = monthToSeason(ctx.month);
+  if (ctx.season && !isMonthInSeason(ctx.month, ctx.season)) ctx.month = seasonToDefaultMonth(ctx.season) || ctx.month;
+  updateContextUI(ctx);
+  await persistManualContext(ctx);
+  renderMessage(t('manualUpdated'), 'bot');
 }
 
 async function resetManualContext() {
@@ -326,796 +340,488 @@ async function resetManualContext() {
   await persistManualContext(activeContext);
 }
 
-function extractFollowupChips(text) {
-  const match = text.match(/FOLLOWUP_CHIPS:([^\n]+)/);
-  return match ? match[1].replace(/\*\*$/, '').split('|').map(x => x.trim().replace(/\*\*$/, '')).filter(Boolean) : [];
-}
-
-function removeFollowupMarker(text) {
-  return text.replace(/---\s*\*\*FOLLOWUP_CHIPS:[^\n]+\*\*/g, '').replace(/FOLLOWUP_CHIPS:[^\n]+/g, '').trim();
-}
-
-function parseMarkdown(text) {
-  text = text.replace(/\n(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/g, parseTable);
-  const lines = text.split('\n');
-  let html = '';
-  let inList = false;
-  for (let line of lines) {
-    if (/^### (.+)/.test(line)) { if (inList) { html += '</ul>'; inList = false; } html += `<h3>${line.replace(/^### /, '')}</h3>`; }
-    else if (/^## (.+)/.test(line)) { if (inList) { html += '</ul>'; inList = false; } html += `<h2>${line.replace(/^## /, '')}</h2>`; }
-    else if (/^# (.+)/.test(line)) { if (inList) { html += '</ul>'; inList = false; } html += `<h1>${line.replace(/^# /, '')}</h1>`; }
-    else if (/^[*-] (.+)/.test(line)) { if (!inList) { html += '<ul>'; inList = true; } html += `<li>${inlineFormat(line.replace(/^[*-] /, ''))}</li>`; }
-    else if (line.trim().startsWith('<table')) { if (inList) { html += '</ul>'; inList = false; } html += line; }
-    else if (line.trim() === '') { if (inList) { html += '</ul>'; inList = false; } html += '<br>'; }
-    else { if (inList) { html += '</ul>'; inList = false; } html += `<p>${inlineFormat(line)}</p>`; }
-  }
-  if (inList) html += '</ul>';
-  return html;
-}
-
+// ── Markdown Parser ────────────────────────────────────────────────────
 function inlineFormat(text) {
-  return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>').replace(/`([^`]+)`/g, '<code>$1</code>');
-}
-
-function stripTableVisuals(text) {
-  return String(text || '')
-    .replace(/^[\s\u2600-\u27BF\u{1F300}-\u{1FAFF}\uFE0F]+/u, '')
-    .trim();
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,     '<em>$1</em>')
+    .replace(/`([^`]+)`/g,     '<code>$1</code>');
 }
 
 function parseTable(match, header, sep, body) {
-  const headers = header.trim().split('|').map(c => stripTableVisuals(c)).filter(Boolean);
-  const rows = body.trim().split('\n').filter(r => r.includes('|'));
+  const headers = header.trim().split('|').map(c => c.trim()).filter(Boolean);
+  const rows    = body.trim().split('\n').filter(r => r.includes('|'));
   let html = '<table><thead><tr>';
   headers.forEach(c => html += `<th>${inlineFormat(c)}</th>`);
   html += '</tr></thead><tbody>';
   rows.forEach(row => {
-    const cells = row.trim().split('|').map(c => stripTableVisuals(c)).filter(Boolean);
-    html += '<tr>';
-    cells.forEach(c => html += `<td>${inlineFormat(c)}</td>`);
-    html += '</tr>';
+    const cells = row.trim().split('|').map(c => c.trim()).filter(Boolean);
+    html += '<tr>' + cells.map(c => `<td>${inlineFormat(c)}</td>`).join('') + '</tr>';
   });
   html += '</tbody></table>';
   return '\n' + html + '\n';
 }
 
-function stripMarkdown(text) {
-  return String(text || '')
-    .replace(/---\s*\*\*FOLLOWUP_CHIPS:[\s\S]*$/g, '')
-    .replace(/FOLLOWUP_CHIPS:[^\n]+/g, '')
-    .replace(/\|[-| :]+\|/g, ' ')
-    .replace(/^\s*\|.*\|\s*$/gm, ' ')
-    .replace(/#{1,3}\s*/g, '')
-    .replace(/\*\*/g, '')
-    .replace(/\*/g, '')
-    .replace(/`/g, '')
-    .replace(/[₹]/g, ' rupees ')
-    .replace(/[–—]/g, ' to ')
-    .replace(/[^\S\r\n]+/g, ' ')
-    .replace(/\n+/g, '. ')
-    .replace(/\s+/g, ' ')
+function parseMarkdown(text) {
+  text = text.replace(/\n(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/g, parseTable);
+  const lines = text.split('\n');
+  let html = '', inList = false;
+  for (const line of lines) {
+    if      (/^### (.+)/.test(line))  { if (inList) { html += '</ul>'; inList = false; } html += `<h3>${inlineFormat(line.slice(4))}</h3>`; }
+    else if (/^## (.+)/.test(line))   { if (inList) { html += '</ul>'; inList = false; } html += `<h2>${inlineFormat(line.slice(3))}</h2>`; }
+    else if (/^# (.+)/.test(line))    { if (inList) { html += '</ul>'; inList = false; } html += `<h1>${inlineFormat(line.slice(2))}</h1>`; }
+    else if (/^[*\-] (.+)/.test(line)){ if (!inList) { html += '<ul>'; inList = true; } html += `<li>${inlineFormat(line.replace(/^[*\-] /, ''))}</li>`; }
+    else if (line.trim().startsWith('<table')) { if (inList) { html += '</ul>'; inList = false; } html += line; }
+    else if (line.trim() === '')       { if (inList) { html += '</ul>'; inList = false; } html += '<br>'; }
+    else                               { if (inList) { html += '</ul>'; inList = false; } html += `<p>${inlineFormat(line)}</p>`; }
+  }
+  if (inList) html += '</ul>';
+  return html;
+}
+
+// ── Follow-up Chips ────────────────────────────────────────────────────
+function generateContextChips(ctx, lang) {
+  const d = ctx.district ? prettyValue(ctx.district) : null;
+  const c = ctx.crop ? prettyValue(ctx.crop) : null;
+  const isTa = lang === 'ta';
+
+  if (isTa) {
+    if (d && c) return [`${d}-இல் ${c}-க்கு உரம் என்ன?`, `${d}-இல் ${c}-க்கு பூச்சி அபாயம் என்ன?`, `${d}-இல் ${c} லாப மதிப்பீடு?`];
+    if (d)      return [`${d}-இல் சிறந்த பயிர்கள்?`, `${d} மழை அளவு என்ன?`, `${d} மாவட்ட விவரம்?`];
+    if (c)      return [`${c}-க்கு உரம் என்ன?`, `${c}-க்கு பூச்சி அபாயம் என்ன?`, `${c} பயிரிட சரியான நேரம்?`];
+    return ['மதுரையில் காரிஃப் சிறந்த பயிர்கள்?', 'கோயம்புத்தூர் மழை அளவு என்ன?', 'தஞ்சாவூரில் நெல்லுக்கு பூச்சி அபாயம்?'];
+  } else {
+    if (d && c) return [`Fertilizer recommendation for ${c} in ${d}?`, `Pest risk for ${c} in ${d}?`, `Estimate profit for ${c} in ${d}?`];
+    if (d)      return [`Best crops for ${d}?`, `${d} rainfall stats?`, `${d} district overview?`];
+    if (c)      return [`Fertilizer recommendation for ${c}?`, `Pest risk for ${c}?`, `Planting time for ${c}?`];
+    return ['Best crops for Madurai during Kharif?', 'Coimbatore rainfall stats?', 'Pest risk for rice in Thanjavur?'];
+  }
+}
+
+function extractFollowupChips(text) {
+  if (!text) return generateContextChips(activeContext, APP_LANGUAGE);
+  const m = text.match(/FOLLOWUP_CHIPS:\s*([^\n]+)/i);
+  if (!m) return generateContextChips(activeContext, APP_LANGUAGE);
+
+  const raw = m[1].replace(/\*\*$/,'').trim();
+  const parts = raw.split('|').map(x => x.replace(/^[\s*"-]+|[\s*"-]+$/g, '').trim()).filter(Boolean);
+
+  const valid = parts.filter(chip => {
+    if (chip.length < 3 || chip.length > 65 || chip.split(/\s+/).length > 10) return false;
+    const lower = chip.toLowerCase();
+    return chip.endsWith('?') ||
+      /^(what|how|which|best|pest|fertilizer|profit|yield|rainfall|overview|wage|irrigation|planting|மழை|உரம்|பூச்சி|பயிர்|விவரம்|லாபம்)/.test(lower);
+  });
+
+  return valid.length >= 2 ? valid : generateContextChips(activeContext, APP_LANGUAGE);
+}
+
+function removeFollowupMarker(text) {
+  if (!text) return '';
+  return text
+    .replace(/---\s*\*\*FOLLOWUP_CHIPS:[^\n]*\*\*/gi, '')
+    .replace(/FOLLOWUP_CHIPS:[^\n]*/gi, '')
     .trim();
 }
 
-function cleanSpeechText(text) {
-  return stripMarkdown(removeFollowupMarker(text))
-    .replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF\uFE0F]/gu, '')
-    .replace(/\bRs\.?\s*/gi, 'rupees ')
-    .replace(/\bkg\b/gi, 'kilograms')
-    .replace(/\b(t\/ha)\b/gi, ' tonnes per hectare')
-    .replace(/\bNPK\b/g, 'N P K')
-    .replace(/\bmm\b/g, ' millimetres')
-    .replace(/\bkm\/h\b/gi, 'kilometres per hour')
-    .replace(/%/g, ' percent')
-    .replace(/[₹]/g, ' rupees ')
-    .replace(/[–—]/g, ' to ')
-    .replace(/:/g, '. ')
-    .replace(/;/g, '. ')
-    .replace(/\bha\b/g, ' hectares')
-    .replace(/\s+([,.])/g, '$1')
-    .replace(/\.{2,}/g, '.')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+// ── Message Rendering ─────────────────────────────────────────────────
+function renderMessage(text, role, animate = true, isWelcome = false) {
+  const row = document.createElement('div');
+  row.className = `msg-row ${role === 'user' ? 'user-row' : 'bot-row'}`;
 
-function hasTamilText(text) {
-  return /[\u0B80-\u0BFF]/.test(text || '');
-}
+  const avatar = document.createElement('div');
+  avatar.className = `msg-avatar ${role === 'user' ? 'user-avatar' : 'bot-avatar'}`;
+  avatar.textContent = role === 'user' ? '👤' : '🌿';
 
-function getAvailableVoices() {
-  return window.speechSynthesis ? speechSynthesis.getVoices() : [];
-}
+  const content = document.createElement('div');
+  content.className = 'msg-content';
 
-function findTamilVoice(voices = getAvailableVoices()) {
-  return voices.find(v => /ta-IN/i.test(v.lang)) ||
-    voices.find(v => /^ta/i.test(v.lang)) ||
-    voices.find(v => /Tamil/i.test(v.name)) ||
-    null;
-}
+  const bubble = document.createElement('div');
+  bubble.className = `msg-bubble ${role === 'user' ? 'user-bubble' : 'bot-bubble'}`;
+  bubble.innerHTML  = role === 'user' ? text.replace(/</g,'&lt;') : parseMarkdown(removeFollowupMarker(text));
 
-function waitForVoices(timeoutMs = 2800) {
-  if (!window.speechSynthesis) return Promise.resolve([]);
-  const existing = speechSynthesis.getVoices();
-  if (existing.length) return Promise.resolve(existing);
-  return new Promise(resolve => {
-    const timer = setTimeout(() => resolve(speechSynthesis.getVoices()), timeoutMs);
-    speechSynthesis.onvoiceschanged = () => {
-      clearTimeout(timer);
-      resolve(speechSynthesis.getVoices());
-    };
-  });
-}
+  content.appendChild(bubble);
 
-function loadPreferredVoice(lang = 'en-IN') {
-  if (!window.speechSynthesis) return null;
-  const voices = getAvailableVoices();
-  if (/ta-IN/i.test(lang)) {
-    preferredVoice = findTamilVoice(voices);
-    return preferredVoice;
+  if (role === 'bot' && isWelcome) content.appendChild(createWelcomeChips());
+
+  if (role === 'bot') {
+    const chips = extractFollowupChips(text);
+    if (chips.length) content.appendChild(buildChips(chips));
   }
-  const naturalVoiceHints = /(natural|neural|online|aria|jenny|guy|sonia|libby|ravi|heera|google|microsoft)/i;
-  preferredVoice =
-    voices.find(v => /en-IN/i.test(v.lang) && naturalVoiceHints.test(v.name)) ||
-    voices.find(v => /en-IN/i.test(v.lang)) ||
-    voices.find(v => /India/i.test(v.name) && naturalVoiceHints.test(v.name)) ||
-    voices.find(v => /^en-(GB|US|AU)/i.test(v.lang) && naturalVoiceHints.test(v.name)) ||
-    voices.find(v => /^en-/i.test(v.lang) && naturalVoiceHints.test(v.name)) ||
-    voices.find(v => /^en-/i.test(v.lang)) ||
-    voices[0] ||
-    null;
-  return preferredVoice;
+
+  const bottomBar = document.createElement('div');
+  bottomBar.className = 'msg-bottom';
+  bottomBar.innerHTML = `<span class="msg-time">${getTime()}</span>`;
+  content.appendChild(bottomBar);
+
+  row.appendChild(avatar);
+  row.appendChild(content);
+  messagesList.appendChild(row);
+  messagesWrap.scrollTop = messagesWrap.scrollHeight;
 }
 
-function splitSpeechText(text, maxLen = 260) {
-  const sentences = text.match(/[^.!?।]+[.!?।]*/g) || [text];
-  const chunks = [];
-  let current = '';
-  sentences.forEach(sentence => {
-    const trimmed = sentence.trim();
-    if (trimmed.length > maxLen) {
-      if (current) {
-        chunks.push(current);
-        current = '';
-      }
-      const parts = trimmed.match(new RegExp(`.{1,${maxLen}}(\\s|$)`, 'g')) || [trimmed];
-      for (const part of parts) {
-        if (part.trim()) chunks.push(part.trim());
-      }
-      return;
-    }
-    const next = `${current} ${trimmed}`.trim();
-    if (next.length > maxLen && current) {
-      chunks.push(current);
-      current = trimmed;
-    } else {
-      current = next;
-    }
+function buildChips(chips) {
+  const wrap = document.createElement('div');
+  wrap.className = 'followup-chips';
+  chips.forEach(chip => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'followup-chip';
+    btn.textContent = chip;
+    btn.addEventListener('click', () => sendMessage(chip));
+    wrap.appendChild(btn);
   });
-  if (current) chunks.push(current);
-  return chunks;
+  return wrap;
 }
 
-function speakNextChunk() {
-  clearTimeout(speechWatchdog);
-  clearInterval(speechKeepAlive);
-  if (!window.speechSynthesis || !speechQueue.length) {
-    currentUtterance = null;
+function createWelcomeChips() {
+  const wrap    = document.createElement('div');
+  wrap.className = 'welcome-chips';
+  const queries = APP_LANGUAGE === 'ta' ? WELCOME_QUERIES_TA : WELCOME_QUERIES;
+  queries.forEach(q => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'welcome-chip';
+    btn.textContent = q;
+    btn.addEventListener('click', () => { chatInput.value = q; chatInput.focus(); });
+    wrap.appendChild(btn);
+  });
+  return wrap;
+}
+
+// ── Typing Indicator ──────────────────────────────────────────────────
+let typingEl = null;
+function showTyping() {
+  if (typingEl) return;
+  typingEl = document.createElement('div');
+  typingEl.className = 'msg-row typing-row bot-row';
+  typingEl.innerHTML = `<div class="msg-avatar bot-avatar">🌿</div><div class="typing-bubble"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div><span class="typing-label">Thinking…</span></div>`;
+  messagesList.appendChild(typingEl);
+  messagesWrap.scrollTop = messagesWrap.scrollHeight;
+}
+function hideTyping() { if (typingEl) { typingEl.remove(); typingEl = null; } }
+
+// ── Streaming Bubble ──────────────────────────────────────────────────
+function createStreamingBubble() {
+  const row = document.createElement('div');
+  row.className = 'msg-row bot-row';
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar bot-avatar';
+  avatar.textContent = '🌿';
+  const content = document.createElement('div');
+  content.className = 'msg-content';
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble bot-bubble streaming-bubble';
+  content.appendChild(bubble);
+  row.appendChild(avatar);
+  row.appendChild(content);
+  messagesList.appendChild(row);
+  messagesWrap.scrollTop = messagesWrap.scrollHeight;
+  return { row, bubble, content };
+}
+
+function finaliseStreamingBubble(bubble, content, fullText) {
+  bubble.classList.remove('streaming-bubble', 'streaming-active');
+  bubble.innerHTML = parseMarkdown(removeFollowupMarker(fullText));
+
+  const chips = extractFollowupChips(fullText);
+  if (chips.length) content.appendChild(buildChips(chips));
+
+  const bottomBar = document.createElement('div');
+  bottomBar.className = 'msg-bottom';
+  bottomBar.innerHTML = `<span class="msg-time">${getTime()}</span>`;
+  content.appendChild(bottomBar);
+  messagesWrap.scrollTop = messagesWrap.scrollHeight;
+}
+
+// ── Send Message & Receive Memory Updates ──────────────────────────────
+async function sendMessage(text) {
+  text = (text || '').trim();
+  if (isProcessing || !text) return;
+
+  // ── /price command shortcut ──────────────────────────────────────────
+  const priceMatch = text.match(/^\/price\s+(.+)/i);
+  if (priceMatch) {
+    const commodity = priceMatch[1].trim();
+    renderMessage(text, 'user');
+    chatInput.value = '';
+    showTyping();
+    try {
+      const txt = window._fetchPriceFor ? await window._fetchPriceFor(commodity, activeContext.district) : null;
+      hideTyping();
+      if (txt) renderMessage(txt, 'bot');
+      else renderMessage(`❌ No price data found for "${commodity}". Try selecting from the Market Price tool.`, 'bot');
+    } catch (e) {
+      hideTyping();
+      renderMessage(`❌ Could not fetch price for "${commodity}": ${e.message}`, 'bot');
+    }
     return;
   }
-  const runId = speechRunId;
-  const chunk = speechQueue.shift();
-  currentUtterance = new SpeechSynthesisUtterance(chunk);
-  currentUtterance.lang = currentSpeechLang;
-  currentUtterance.voice = preferredVoice || null;
-  currentUtterance.rate = currentSpeechLang === 'ta-IN' ? 0.86 : 0.9;
-  currentUtterance.pitch = currentSpeechLang === 'ta-IN' ? 1.0 : 0.98;
-  currentUtterance.volume = 1;
-  currentUtterance.onend = () => {
-    if (runId !== speechRunId) return;
-    clearInterval(speechKeepAlive);
-    currentUtterance = null;
-    setTimeout(() => {
-      if (runId === speechRunId) speakNextChunk();
-    }, currentSpeechLang === 'ta-IN' ? 90 : 70);
-  };
-  currentUtterance.onerror = () => {
-    if (runId !== speechRunId) return;
-    clearTimeout(speechWatchdog);
-    clearInterval(speechKeepAlive);
-    currentUtterance = null;
-    speakNextChunk();
-  };
-  speechSynthesis.speak(currentUtterance);
-  speechKeepAlive = setInterval(() => {
-    if (runId !== speechRunId || !currentUtterance) {
-      clearInterval(speechKeepAlive);
-      return;
-    }
-    if (speechSynthesis.paused) speechSynthesis.resume();
-  }, 6000);
-}
 
-function getTime() { return new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); }
-async function speakText(text) {
-  if (!window.speechSynthesis) return;
-  const cleaned = cleanSpeechText(text);
-  if (!cleaned) return;
-  stopSpeaking();
-  speechRunId += 1;
-  currentSpeechLang = APP_LANGUAGE === 'ta' ? 'ta-IN' : (hasTamilText(cleaned) ? 'ta-IN' : 'en-IN');
-  await waitForVoices();
-  loadPreferredVoice(currentSpeechLang);
-  if (currentSpeechLang === 'ta-IN' && !preferredVoice) {
-    setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).tamilVoiceMissing, true);
-    return;
-  }
-  speechQueue = splitSpeechText(cleaned);
-  speakNextChunk();
-}
-function stopSpeaking() {
-  speechRunId += 1;
-  speechQueue = [];
-  clearTimeout(speechWatchdog);
-  clearInterval(speechKeepAlive);
-  if (window.speechSynthesis) speechSynthesis.cancel();
-  currentUtterance = null;
-}
-function updateTTSButton() {
-  if (!ttsBtnGlobal) return;
-  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
-  if (!ttsBtnGlobal.querySelector('.tts-label')) {
-    const label = document.createElement('span');
-    label.className = 'tts-label';
-    ttsBtnGlobal.appendChild(label);
-  }
-  ttsBtnGlobal.classList.toggle('tts-active', ttsEnabled);
-  ttsBtnGlobal.title = ttsEnabled ? t.disableTTS : t.enableTTS;
-  ttsBtnGlobal.querySelector('.tts-icon').textContent = ttsEnabled ? t.soundOnLabel : t.audioLabel;
-  ttsBtnGlobal.querySelector('.tts-label').textContent = ttsEnabled ? t.ttsOn : t.ttsOff;
-}
-function toggleGlobalTTS() { ttsEnabled = !ttsEnabled; updateTTSButton(); if (!ttsEnabled) stopSpeaking(); }
+  isProcessing = true;
+  renderMessage(text, 'user');
+  chatInput.value = '';
+  sendBtn.disabled = true;
+  showTyping();
 
-function languageCode() {
-  return APP_LANGUAGE === 'ta' ? 'ta-IN' : 'en-IN';
-}
+  let fullText = '', streamBubble = null, streamContent = null;
 
-const UI_TEXT = {
-  en: {
-    documentTitle: 'Smart Farming AI - Tamil Nadu Agricultural Assistant',
-    logoTitle: 'SmartFarm AI',
-    logoSub: 'Tamil Nadu Agricultural Intelligence',
-    topbarTitle: 'Smart Farming AI',
-    topbarSub: 'Professional agricultural assistant for Tamil Nadu farming insights',
-    soilLabel: 'Soil Identification',
-    soilHelp: 'Upload a soil photo to identify soil type and use it in follow-up queries.',
-    uploadSoil: '📎 Upload Soil Image',
-    manualLabel: 'Manual Context',
-    cropLabel: 'Crop',
-    locationLabel: 'Location',
-    soilFieldLabel: 'Soil',
-    monthLabel: 'Month',
-    seasonLabel: 'Season',
-    applyContext: 'Apply Context',
-    resetContext: 'Reset',
-    activeLabel: 'Active Context',
-    contextHelp: 'Current stored values used for follow-up questions.',
-    whatifLabel: 'What-If Simulator',
-    scenarioTitle: '🔬 Scenario Simulator',
-    irrigationChange: '💧 Irrigation Change',
-    rainfallChange: '🌧️ Rainfall Change',
-    simulate: '▶ Run Simulation',
-    simulateFor: district => `▶ Simulate for ${district}`,
-    selectSoil: 'Select soil',
-    alluvialSoil: 'Alluvial soil',
-    blackSoil: 'Black soil',
-    claySoil: 'Clay soil',
-    redSoil: 'Red soil',
-    selectMonth: 'Select month',
-    selectSeason: 'Select season',
-    winter: 'Winter',
-    summer: 'Summer',
-    kharifRainy: 'Kharif / Rainy',
-    rabi: 'Rabi',
-    autumn: 'Autumn',
-    wholeYear: 'Whole Year / Perennial',
-    months: ['January', 'February', 'December', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November'],
-    enableTTS: 'Enable auto voice replies',
-    disableTTS: 'Disable auto voice replies',
-    clearTitle: 'Clear conversation',
-    micTitle: 'Speak your question',
-    micStopTitle: 'Stop listening',
-    sendTitle: 'Send message',
-    sidebarTitle: 'Toggle sidebar',
-    removeImageTitle: 'Remove image',
-    listening: 'Listening... speak your farming question.',
-    voiceUnsupported: 'Voice input is not supported in this browser.',
-    heard: text => `Heard: ${text}`,
-    micPermission: 'Microphone permission was blocked. Please allow microphone access.',
-    voiceTryAgain: 'Voice input stopped. Please try again.',
-    voiceStarting: 'Starting microphone...',
-    voiceSending: 'Sending voice question...',
-    noSpeech: 'No speech detected. Tap the mic and try again.',
-    voiceStopped: 'Voice input stopped.',
-    tamilVoiceMissing: 'Tamil voice is not available in this browser/OS. Please install or enable a Tamil voice; English fallback is blocked.',
-    manualUpdated: '✅ Manual context updated.',
-    noDistrictSimulation: '⚠️ Please set a district in Manual Context or ask a district-specific question first, then run the simulation again.',
-    inputFooter: 'Tamil Nadu Smart Farming • Context-aware follow-up support',
-    cropPlaceholder: 'e.g. Rice',
-    districtPlaceholder: 'e.g. Madurai',
-    chatPlaceholder: 'Ask about crops, rainfall, fertilizer, irrigation, pest risks...',
-  },
-  ta: {
-    documentTitle: 'ஸ்மார்ட் வேளாண்மை AI - தமிழ்நாடு வேளாண்மை உதவியாளர்',
-    logoTitle: 'SmartFarm AI',
-    logoSub: 'தமிழ்நாடு வேளாண்மை நுண்ணறிவு',
-    topbarTitle: 'ஸ்மார்ட் வேளாண்மை AI',
-    topbarSub: 'தமிழ்நாடு வேளாண்மை தகவல்களுக்கான உதவியாளர்',
-    soilLabel: 'மண் அடையாளம்',
-    soilHelp: 'மண் வகையை அறிய புகைப்படத்தை பதிவேற்றவும்.',
-    uploadSoil: '📎 மண் படத்தை பதிவேற்று',
-    manualLabel: 'கையேடு சூழல்',
-    cropLabel: 'பயிர்',
-    locationLabel: 'மாவட்டம்',
-    soilFieldLabel: 'மண்',
-    monthLabel: 'மாதம்',
-    seasonLabel: 'பருவம்',
-    applyContext: 'சூழலை பயன்படுத்து',
-    resetContext: 'மீட்டமை',
-    activeLabel: 'செயலில் உள்ள சூழல்',
-    contextHelp: 'அடுத்த கேள்விகளுக்கு பயன்படுத்தப்படும் தற்போதைய மதிப்புகள்.',
-    whatifLabel: 'என்ன ஆகும்? சோதனை',
-    scenarioTitle: '🔬 சூழ்நிலை சோதனை',
-    irrigationChange: '💧 பாசன மாற்றம்',
-    rainfallChange: '🌧️ மழை மாற்றம்',
-    simulate: '▶ சோதனை இயக்கு',
-    simulateFor: district => `▶ ${district} க்கு சோதனை`,
-    selectSoil: 'மண் தேர்வு',
-    alluvialSoil: 'வண்டல் மண்',
-    blackSoil: 'கரிசல் மண்',
-    claySoil: 'களிமண்',
-    redSoil: 'சிவப்பு மண்',
-    selectMonth: 'மாதம் தேர்வு',
-    selectSeason: 'பருவம் தேர்வு',
-    winter: 'குளிர்காலம்',
-    summer: 'கோடைகாலம்',
-    kharifRainy: 'காரிஃப் / மழைக்காலம்',
-    rabi: 'ரபி',
-    autumn: 'இலையுதிர் காலம்',
-    wholeYear: 'முழு ஆண்டு / நிரந்தர பயிர்',
-    months: ['ஜனவரி', 'பிப்ரவரி', 'டிசம்பர்', 'மார்ச்', 'ஏப்ரல்', 'மே', 'ஜூன்', 'ஜூலை', 'ஆகஸ்ட்', 'செப்டம்பர்', 'அக்டோபர்', 'நவம்பர்'],
-    enableTTS: 'குரல் பதில்களை இயக்கு',
-    disableTTS: 'குரல் பதில்களை நிறுத்து',
-    clearTitle: 'உரையாடலை அழி',
-    micTitle: 'உங்கள் கேள்வியை பேசுங்கள்',
-    micStopTitle: 'கேட்பதை நிறுத்து',
-    sendTitle: 'செய்தி அனுப்பு',
-    sidebarTitle: 'பக்கப்பட்டியை திற/மூடு',
-    removeImageTitle: 'படத்தை அகற்று',
-    listening: 'கேட்கிறது... உங்கள் வேளாண்மை கேள்வியை பேசுங்கள்.',
-    voiceUnsupported: 'இந்த உலாவியில் குரல் உள்ளீடு ஆதரிக்கப்படவில்லை.',
-    heard: text => `கேட்டது: ${text}`,
-    micPermission: 'மைக்ரோஃபோன் அனுமதி தடுக்கப்பட்டுள்ளது. மைக்ரோஃபோன் அணுகலை அனுமதிக்கவும்.',
-    voiceTryAgain: 'குரல் உள்ளீடு நிறுத்தப்பட்டது. மீண்டும் முயற்சிக்கவும்.',
-    voiceStarting: 'குரல் உள்ளீடு தொடங்குகிறது. சிறிது காத்திருக்கவும்.',
-    voiceSending: 'குரல் கேள்வி அனுப்பப்படுகிறது...',
-    noSpeech: 'பேச்சு கண்டறியப்படவில்லை. மைக் அழுத்தி மீண்டும் முயற்சிக்கவும்.',
-    voiceStopped: 'குரல் உள்ளீடு நிறுத்தப்பட்டது.',
-    tamilVoiceMissing: 'இந்த உலாவி/சாதனத்தில் தமிழ் குரல் இல்லை. தமிழ் voice ஐ நிறுவவும் அல்லது இயக்கு; English fallback தடுக்கப்பட்டுள்ளது.',
-    manualUpdated: '✅ கையேடு சூழல் புதுப்பிக்கப்பட்டது.',
-    noDistrictSimulation: '⚠️ முதலில் கையேடு சூழலில் மாவட்டத்தை அமைக்கவும் அல்லது மாவட்டம் சார்ந்த கேள்வி கேட்கவும். பிறகு சோதனையை மீண்டும் இயக்கவும்.',
-    inputFooter: 'தமிழ்நாடு ஸ்மார்ட் வேளாண்மை • சூழல் சார்ந்த உதவி',
-    cropPlaceholder: 'உ.தா. நெல்',
-    districtPlaceholder: 'உ.தா. மதுரை',
-    chatPlaceholder: 'பயிர், மழை, உரம், பாசனம், பூச்சி அபாயம் பற்றி கேளுங்கள்...',
-  }
-};
-
-Object.assign(UI_TEXT.en, {
-  logoTitle: 'SmartFarm AI',
-  logoSub: 'Tamil Nadu Agricultural Intelligence',
-  uploadSoil: 'Upload Soil Image',
-  scenarioTitle: 'Scenario Simulator',
-  irrigationChange: 'Irrigation Change',
-  rainfallChange: 'Rainfall Change',
-  fertilizerChange: 'Fertilizer',
-  temperatureChange: 'Temperature',
-  pestIntensity: 'Pest Intensity',
-  soilMoisture: 'Soil Moisture',
-  simulate: 'Run Simulation',
-  simulateFor: district => `Simulate for ${district}`,
-  weatherLabel: 'Weather Updates',
-  weatherEmpty: 'Select or ask about a district to load live weather.',
-  nextHours: 'Next hours',
-  nextDays: 'Next days',
-  humidityLabel: 'Humidity',
-  rainLabel: 'Rain',
-  windLabel: 'Wind',
-  toolsLabel: 'Tools',
-  soilOption: 'Soil Identification',
-  languageButton: 'English',
-  audioLabel: 'Audio',
-  soundOnLabel: 'Sound on',
-  ttsOn: 'On',
-  ttsOff: 'Off',
-  resetLabel: 'Reset',
-  skipLink: 'Skip to chat input',
-  inputFooter: 'Tamil Nadu Smart Farming • Context-aware follow-up support',
-  manualUpdated: 'Manual context updated.',
-  noDistrictSimulation: 'Please set a district first, then run the simulation again.',
-});
-
-Object.assign(UI_TEXT.ta, {
-  documentTitle: 'ஸ்மார்ட் வேளாண்மை AI - தமிழ்நாடு வேளாண்மை உதவியாளர்',
-  logoTitle: 'ஸ்மார்ட் ஃபார்ம் AI',
-  logoSub: 'தமிழ்நாடு வேளாண்மை நுண்ணறிவு',
-  topbarTitle: 'ஸ்மார்ட் வேளாண்மை AI',
-  topbarSub: 'தமிழ்நாடு விவசாய தகவல்களுக்கான தொழில்முறை உதவியாளர்',
-  soilLabel: 'மண் அடையாளம்',
-  soilHelp: 'மண் வகையை அறிய மண் புகைப்படத்தை பதிவேற்றவும்.',
-  uploadSoil: 'மண் படத்தை பதிவேற்றவும்',
-  manualLabel: 'கையேடு சூழல்',
-  cropLabel: 'பயிர்',
-  locationLabel: 'இடம்',
-  soilFieldLabel: 'மண்',
-  monthLabel: 'மாதம்',
-  seasonLabel: 'பருவம்',
-  applyContext: 'சூழலை பயன்படுத்து',
-  resetContext: 'மீட்டமை',
-  activeLabel: 'செயலில் உள்ள சூழல்',
-  contextHelp: 'அடுத்த கேள்விகளுக்குப் பயன்படுத்தப்படும் தற்போதைய மதிப்புகள்.',
-  whatifLabel: 'என்ன ஆகும்? சோதனை',
-  scenarioTitle: 'சூழ்நிலை சோதனை',
-  irrigationChange: 'பாசன மாற்றம்',
-  rainfallChange: 'மழை மாற்றம்',
-  fertilizerChange: 'உரம்',
-  temperatureChange: 'வெப்பநிலை',
-  pestIntensity: 'பூச்சி தீவிரம்',
-  soilMoisture: 'மண் ஈரப்பதம்',
-  simulate: 'சோதனையை இயக்கு',
-  simulateFor: district => `${district} க்கான சோதனை`,
-  weatherLabel: 'வானிலை புதுப்பிப்புகள்',
-  weatherEmpty: 'நேரடி வானிலையை காண மாவட்டத்தை தேர்ந்தெடுக்கவும் அல்லது கேள்வியில் குறிப்பிடவும்.',
-  nextHours: 'அடுத்த மணிநேரங்கள்',
-  nextDays: 'அடுத்த நாட்கள்',
-  humidityLabel: 'ஈரப்பதம்',
-  rainLabel: 'மழை',
-  windLabel: 'காற்று',
-  toolsLabel: 'கருவிகள்',
-  soilOption: 'மண் அடையாளம்',
-  languageButton: 'தமிழ்',
-  audioLabel: 'ஒலி',
-  soundOnLabel: 'ஒலி இயக்கு',
-  ttsOn: 'இயக்கம்',
-  ttsOff: 'நிறுத்தம்',
-  resetLabel: 'மீட்டமை',
-  skipLink: 'உரை உள்ளீட்டுக்கு செல்லவும்',
-  selectSoil: 'மண் தேர்வு',
-  alluvialSoil: 'வண்டல் மண்',
-  blackSoil: 'கரிசல் மண்',
-  claySoil: 'களிமண்',
-  redSoil: 'சிவப்பு மண்',
-  selectMonth: 'மாதம் தேர்வு',
-  selectSeason: 'பருவம் தேர்வு',
-  winter: 'குளிர்காலம்',
-  summer: 'கோடைக்காலம்',
-  kharifRainy: 'காரிஃப் / மழைக்காலம்',
-  rabi: 'ரபி',
-  autumn: 'இலையுதிர் காலம்',
-  wholeYear: 'முழு ஆண்டு / நிரந்தர பயிர்',
-  months: ['ஜனவரி', 'பிப்ரவரி', 'டிசம்பர்', 'மார்ச்', 'ஏப்ரல்', 'மே', 'ஜூன்', 'ஜூலை', 'ஆகஸ்ட்', 'செப்டம்பர்', 'அக்டோபர்', 'நவம்பர்'],
-  enableTTS: 'குரல் பதில்களை இயக்கு',
-  disableTTS: 'குரல் பதில்களை நிறுத்து',
-  clearTitle: 'உரையாடலை அழிக்கவும்',
-  micTitle: 'உங்கள் கேள்வியை பேசுங்கள்',
-  micStopTitle: 'கேட்பதை நிறுத்து',
-  sendTitle: 'செய்தி அனுப்பு',
-  sidebarTitle: 'பக்கப்பட்டியை திற/மூடு',
-  removeImageTitle: 'படத்தை அகற்று',
-  listening: 'கேட்கிறது... உங்கள் விவசாய கேள்வியை பேசுங்கள்.',
-  voiceUnsupported: 'இந்த உலாவியில் குரல் உள்ளீடு ஆதரிக்கப்படவில்லை.',
-  heard: text => `கேட்டது: ${text}`,
-  micPermission: 'மைக்ரோஃபோன் அனுமதி தடுக்கப்பட்டுள்ளது. மைக்ரோஃபோன் அணுகலை அனுமதிக்கவும்.',
-  voiceTryAgain: 'குரல் உள்ளீடு நிறுத்தப்பட்டது. மீண்டும் முயற்சிக்கவும்.',
-  voiceStarting: 'மைக்ரோஃபோன் தொடங்குகிறது...',
-  voiceSending: 'குரல் கேள்வி அனுப்பப்படுகிறது...',
-  noSpeech: 'பேச்சு கண்டறியப்படவில்லை. மைக் அழுத்தி மீண்டும் முயற்சிக்கவும்.',
-  voiceStopped: 'குரல் உள்ளீடு நிறுத்தப்பட்டது.',
-  tamilVoiceMissing: 'இந்த உலாவி அல்லது சாதனத்தில் தமிழ் குரல் இல்லை. தமிழ் குரலை நிறுவவும் அல்லது இயக்கு.',
-  manualUpdated: 'கையேடு சூழல் புதுப்பிக்கப்பட்டது.',
-  noDistrictSimulation: 'முதலில் ஒரு மாவட்டத்தை அமைத்து பின்னர் சோதனையை மீண்டும் இயக்கவும்.',
-  inputFooter: 'தமிழ்நாடு ஸ்மார்ட் வேளாண்மை • சூழல் சார்ந்த தொடர்ச்சி உதவி',
-  cropPlaceholder: 'உ.தா. நெல்',
-  districtPlaceholder: 'உ.தா. மதுரை',
-  chatPlaceholder: 'பயிர், மழை, உரம், பாசனம், பூச்சி அபாயம் பற்றி கேளுங்கள்...',
-});
-
-function setText(selector, value) {
-  const el = document.querySelector(selector);
-  if (el) el.textContent = value;
-}
-
-function setPlaceholder(selector, value) {
-  const el = document.querySelector(selector);
-  if (el) el.placeholder = value;
-}
-
-function setTitle(selector, value) {
-  const el = document.querySelector(selector);
-  if (el) el.title = value;
-}
-
-function setSelectText(select, updates) {
-  if (!select) return;
-  updates.forEach(({ value, text }, index) => {
-    const option = value === undefined ? select.options[index] : Array.from(select.options).find(opt => opt.value === value);
-    if (option) textContentPreservingValue(option, text, value);
-  });
-}
-
-function textContentPreservingValue(option, text, value) {
-  if (value !== undefined) option.value = value;
-  option.textContent = text;
-}
-
-function applyPageLanguage() {
-  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
-  document.documentElement.lang = APP_LANGUAGE === 'ta' ? 'ta' : 'en';
-  document.title = t.documentTitle;
-  setText('.skip-link', t.skipLink);
-  setText('.logo-title', t.logoTitle);
-  setText('.logo-sub', t.logoSub);
-  setText('.topbar-title', UI_TEXT.en.topbarTitle);
-  setText('.topbar-sub', UI_TEXT.en.topbarSub);
-  setText('.sidebar-section:has(#contextPanel) .sidebar-label', t.activeLabel);
-  setText('.weather-section .sidebar-label', t.weatherLabel);
-  setText('#whatifPanel .sidebar-label', t.whatifLabel);
-  setText('.sidebar-section:has(.tool-card) .sidebar-label', t.soilLabel);
-  setText('.tool-help', t.soilHelp);
-  setText('.sidebar-upload-btn span', t.uploadSoil);
-  setText('#weatherEmpty', t.weatherEmpty);
-  const weatherSubtitles = document.querySelectorAll('.weather-subtitle');
-  if (weatherSubtitles[0]) weatherSubtitles[0].textContent = t.nextHours;
-  if (weatherSubtitles[1]) weatherSubtitles[1].textContent = t.nextDays;
-  if (weatherHumidity && weatherHumidity.textContent.includes('-')) weatherHumidity.textContent = `${t.humidityLabel} -`;
-  if (weatherRain && weatherRain.textContent.includes('-')) weatherRain.textContent = `${t.rainLabel} -`;
-  if (weatherWind && weatherWind.textContent.includes('-')) weatherWind.textContent = `${t.windLabel} -`;
-  const labels = document.querySelectorAll('.manual-field label');
-  if (labels[0]) labels[0].textContent = t.cropLabel;
-  if (labels[1]) labels[1].textContent = t.locationLabel;
-  if (labels[2]) labels[2].textContent = t.soilFieldLabel;
-  if (labels[3]) labels[3].textContent = t.monthLabel;
-  if (labels[4]) labels[4].textContent = t.seasonLabel;
-  setText('#applyContextBtn', t.applyContext);
-  setText('#resetContextBtn', t.resetContext);
-  setText('.context-help', t.contextHelp);
-  setText('.topbar-context-label', t.activeLabel);
-  const contextKeys = document.querySelectorAll('.context-key');
-  if (contextKeys[0]) contextKeys[0].textContent = t.cropLabel;
-  if (contextKeys[1]) contextKeys[1].textContent = t.locationLabel;
-  if (contextKeys[2]) contextKeys[2].textContent = t.soilFieldLabel;
-  if (contextKeys[3]) contextKeys[3].textContent = t.monthLabel;
-  if (contextKeys[4]) contextKeys[4].textContent = t.seasonLabel;
-  setText('.whatif-panel h4', t.scenarioTitle);
-  const whatifSpans = document.querySelectorAll('.whatif-label span');
-  if (whatifSpans[0]) whatifSpans[0].textContent = t.irrigationChange;
-  if (whatifSpans[1]) whatifSpans[1].textContent = t.rainfallChange;
-  if (whatifSpans[2]) whatifSpans[2].textContent = t.fertilizerChange;
-  if (whatifSpans[3]) whatifSpans[3].textContent = t.temperatureChange;
-  if (whatifSpans[4]) whatifSpans[4].textContent = t.pestIntensity;
-  if (whatifSpans[5]) whatifSpans[5].textContent = t.soilMoisture;
-  if (manualSoil) {
-    setSelectText(manualSoil, [
-      { value: '', text: t.selectSoil },
-      { value: 'alluvial soil', text: t.alluvialSoil },
-      { value: 'black soil', text: t.blackSoil },
-      { value: 'clay soil', text: t.claySoil },
-      { value: 'red soil', text: t.redSoil },
-    ]);
-  }
-  if (manualMonth) {
-    const monthValues = ['January', 'February', 'December', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November'];
-    if (manualMonth.options[0]) textContentPreservingValue(manualMonth.options[0], t.selectMonth, '');
-    monthValues.forEach((month, index) => {
-      const option = Array.from(manualMonth.options).find(opt => opt.value === month || opt.textContent === month || opt.textContent === (UI_TEXT.ta.months[index]));
-      if (option) textContentPreservingValue(option, t.months[index], month);
+  try {
+    const res = await fetch('/chat_stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, session_id: SESSION_ID, language: APP_LANGUAGE })
     });
-    const monthGroups = manualMonth.querySelectorAll('optgroup');
-    if (monthGroups[0]) monthGroups[0].label = t.winter;
-    if (monthGroups[1]) monthGroups[1].label = t.summer;
-    if (monthGroups[2]) monthGroups[2].label = t.kharifRainy;
-    if (monthGroups[3]) monthGroups[3].label = t.rabi;
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith('data:')) continue;
+        let evt;
+        try { evt = JSON.parse(line.slice(5).trim()); } catch { continue; }
+
+        if (evt.type === 'token') {
+          if (!streamBubble) {
+            hideTyping();
+            const c = createStreamingBubble();
+            streamBubble = c.bubble; streamContent = c.content;
+          }
+          fullText += evt.token;
+          streamBubble.textContent = removeFollowupMarker(fullText);
+          streamBubble.classList.add('streaming-active');
+          messagesWrap.scrollTop = messagesWrap.scrollHeight;
+
+        } else if (evt.type === 'done') {
+          if (evt.session_id) { SESSION_ID = evt.session_id; localStorage.setItem('sf_session', SESSION_ID); }
+          // CRITICAL: Update active context automatically whenever memory changes!
+          if (evt.memory) updateContextUI(evt.memory);
+
+        } else if (evt.type === 'error') {
+          throw new Error(evt.message || 'Stream error');
+        }
+      }
+    }
+
+    if (streamBubble) {
+      finaliseStreamingBubble(streamBubble, streamContent, fullText);
+    } else {
+      hideTyping();
+      renderMessage(fullText || (APP_LANGUAGE === 'ta' ? 'பதில் கிடைக்கவில்லை.' : 'No response received.'), 'bot');
+    }
+
+  } catch (err) {
+    hideTyping();
+    if (streamBubble && fullText) {
+      finaliseStreamingBubble(streamBubble, streamContent, fullText + '\n\n⚠️ *Response may be incomplete.*');
+    } else {
+      renderMessage(
+        APP_LANGUAGE === 'ta'
+          ? '⚠️ இணைப்பு பிழை. சேவையகம் இயங்குகிறதா என சரிபார்க்கவும்.'
+          : '⚠️ Connection error. Please check if the server is running.',
+        'bot'
+      );
+    }
+  } finally {
+    isProcessing = false;
+    sendBtn.disabled = false;
+    chatInput.focus();
   }
-  if (manualSeason) {
-    setSelectText(manualSeason, [
-      { value: '', text: t.selectSeason },
-      { value: 'Winter', text: t.winter },
-      { value: 'Summer', text: t.summer },
-      { value: 'Kharif', text: t.kharifRainy },
-      { value: 'Rabi', text: t.rabi },
-      { value: 'Autumn', text: t.autumn },
-      { value: 'Whole Year', text: t.wholeYear },
-    ]);
+}
+
+// ── Typewriter Animation Stream for Non-SSE Endpoints ─────────────────
+async function typeStreamMessage(text) {
+  if (!text) return;
+  hideTyping();
+  const { bubble, content } = createStreamingBubble();
+  bubble.classList.add('streaming-active');
+
+  const tokens = text.match(/\S+|\s+/g) || [text];
+  let accumulated = '';
+
+  for (const token of tokens) {
+    accumulated += token;
+    bubble.textContent = removeFollowupMarker(accumulated);
+    messagesWrap.scrollTop = messagesWrap.scrollHeight;
+    await new Promise(resolve => setTimeout(resolve, 16));
   }
-  if (simulateBtn) simulateBtn.textContent = activeContext.district ? t.simulateFor(activeContext.district) : t.simulate;
-  if (clearChatBtn) clearChatBtn.textContent = APP_LANGUAGE === 'ta' ? 'Reset' : 'Reset';
-  if (clearChatBtn) clearChatBtn.textContent = t.resetLabel;
-  setText('#chatMenuBtn', t.toolsLabel);
-  setText('.chat-menu-option', t.soilOption);
-  setText('.lang-en', 'English');
-  setText('.lang-divider', '/');
-  setText('.lang-ta', 'தமிழ்');
-  setTitle('#clearChat', t.clearTitle);
-  setTitle('#voiceInputBtn', isListening ? t.micStopTitle : t.micTitle);
-  setTitle('#sendBtn', t.sendTitle);
-  setTitle('#sidebarToggle', t.sidebarTitle);
-  setTitle('#removeImgBtn', t.removeImageTitle);
-  if (voiceInputBtn) voiceInputBtn.setAttribute('aria-label', isListening ? t.micStopTitle : t.micTitle);
-  if (sendBtn) sendBtn.setAttribute('aria-label', t.sendTitle);
-  if (sidebarToggle) sidebarToggle.setAttribute('aria-label', t.sidebarTitle);
-  setPlaceholder('#manualCrop', t.cropPlaceholder);
-  setPlaceholder('#manualDistrict', t.districtPlaceholder);
-  setPlaceholder('#chatInput', t.chatPlaceholder);
-  if (latestWeatherData && weatherContent && !weatherContent.hidden) renderWeather(latestWeatherData);
-  setVoiceStatus(t.inputFooter);
-  updateTTSButton();
+
+  finaliseStreamingBubble(bubble, content, accumulated);
 }
 
-function updateLanguageUI() {
-  if (!languageToggle) return;
-  languageToggle.classList.toggle('tamil-mode', APP_LANGUAGE === 'ta');
-  languageToggle.title = APP_LANGUAGE === 'ta' ? 'தமிழ் மொழி இயக்கத்தில் உள்ளது' : 'English mode is active';
-  applyPageLanguage();
-  if (recognition) recognition.lang = languageCode();
+// ── Soil Image Upload ─────────────────────────────────────────────────
+async function analyzeSoilImage(file) {
+  if (!file || isProcessing) return;
+  isProcessing = true;
+  renderMessage(`📸 Uploaded: ${file.name}`, 'user');
+  showTyping();
+  if (soilPreviewName) soilPreviewName.textContent = `Analyzing ${file.name}…`;
+  if (soilStrip) soilStrip.style.display = 'flex';
+  const form = new FormData();
+  form.append('image', file);
+  form.append('session_id', SESSION_ID || '');
+  form.append('language', APP_LANGUAGE);
+  if (activeContext.district) form.append('district', activeContext.district);
+  try {
+    const res  = await fetch('/soil', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.session_id) { SESSION_ID = data.session_id; localStorage.setItem('sf_session', SESSION_ID); }
+    if (data.memory)     updateContextUI(data.memory);
+    if (soilPreviewName) soilPreviewName.textContent = data.soil_type ? `Detected: ${data.soil_type}` : `Could not analyze`;
+    await typeStreamMessage(data.error ? `❌ ${data.error}` : data.text);
+  } catch (_) {
+    if (soilPreviewName) soilPreviewName.textContent = 'Upload failed';
+    hideTyping();
+    renderMessage(APP_LANGUAGE === 'ta' ? 'மண் படம் பதிவேற்ற முடியவில்லை.' : 'Soil image upload failed.', 'bot');
+  } finally {
+    isProcessing = false;
+    if (soilImageInput) soilImageInput.value = '';
+    sendBtn.disabled = false;
+  }
 }
 
-function toggleLanguage() {
-  APP_LANGUAGE = APP_LANGUAGE === 'ta' ? 'en' : 'ta';
-  localStorage.setItem('sf_language', APP_LANGUAGE);
-  stopSpeaking();
-  updateLanguageUI();
-  renderWelcome();
+// ── What-If Simulator ─────────────────────────────────────────────────
+function updateWhatIfLabels() {
+  if (whatifIrrVal && whatifIrrSlider)           whatifIrrVal.textContent      = `${whatifIrrSlider.value}%`;
+  if (whatifRainVal && whatifRainSlider)          whatifRainVal.textContent     = `${whatifRainSlider.value} mm`;
+  if (whatifFertVal && whatifFertSlider)          whatifFertVal.textContent     = `${whatifFertSlider.value}%`;
+  if (whatifTempVal && whatifTempSlider)          whatifTempVal.textContent     = `${whatifTempSlider.value}°C`;
+  if (whatifPestVal && whatifPestSlider)          whatifPestVal.textContent     = `${whatifPestSlider.value}%`;
+  if (whatifMoistureVal && whatifMoistureSlider)  whatifMoistureVal.textContent = `${whatifMoistureSlider.value}%`;
+  if (simulateBtn) simulateBtn.textContent = activeContext.district ? `▶ Simulate for ${activeContext.district}` : '▶ Run Simulation';
 }
 
-function setVoiceStatus(message, isError = false) {
-  if (!voiceStatus) return;
-  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
-  voiceStatus.textContent = message || t.inputFooter;
-  voiceStatus.classList.toggle('voice-error', Boolean(isError));
+async function sendSimulation() {
+  if (!activeContext.district) {
+    renderMessage(t('noDistrict'), 'bot'); return;
+  }
+  const payload = {
+    district:             activeContext.district,
+    crop:                 activeContext.crop,
+    soil:                 activeContext.soil,
+    season:               activeContext.season,
+    irrigation_delta_pct: parseInt(whatifIrrSlider?.value  || 0),
+    rainfall_delta_mm:    parseInt(whatifRainSlider?.value  || 0),
+    fertilizer_delta_pct: parseInt(whatifFertSlider?.value  || 0),
+    temperature_delta_c:  parseInt(whatifTempSlider?.value  || 0),
+    pest_intensity_pct:   parseInt(whatifPestSlider?.value  || 0),
+    soil_moisture_pct:    parseInt(whatifMoistureSlider?.value || 55),
+    language: APP_LANGUAGE,
+  };
+  const scenarioText = APP_LANGUAGE === 'ta'
+    ? `${activeContext.district} மாவட்டத்தில் ${payload.crop || 'பயிர்'} பயிருக்கு சோதனை: மழை ${payload.rainfall_delta_mm} மி.மீ, பாசனம் ${payload.irrigation_delta_pct}%`
+    : `Running simulation for ${payload.crop || 'current crop'} in ${activeContext.district}`;
+  renderMessage(scenarioText, 'user');
+  showTyping();
+  if (simulateBtn) simulateBtn.disabled = true;
+  try {
+    const res  = await fetch('/simulate_advanced', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Simulation failed');
+    await typeStreamMessage(data.text || 'Simulation complete.');
+  } catch (err) {
+    hideTyping();
+    renderMessage(APP_LANGUAGE === 'ta' ? 'சோதனை இப்போது கிடைக்கவில்லை.' : `Simulation unavailable: ${err.message}`, 'bot');
+  } finally {
+    if (simulateBtn) simulateBtn.disabled = false;
+  }
 }
+
+// ── Voice Input ────────────────────────────────────────────────────────
+function languageCode() { return APP_LANGUAGE === 'ta' ? 'ta-IN' : 'en-IN'; }
 
 function updateVoiceButton() {
   if (!voiceInputBtn) return;
-  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
   voiceInputBtn.classList.toggle('listening', isListening);
-  voiceInputBtn.title = isListening ? t.micStopTitle : t.micTitle;
-  voiceInputBtn.setAttribute('aria-label', isListening ? t.micStopTitle : t.micTitle);
+  voiceInputBtn.title = isListening ? 'Stop listening' : 'Voice input';
+  voiceInputBtn.setAttribute('aria-label', isListening ? 'Stop listening' : 'Start voice input');
 }
 
 function createSpeechRecognition(langOverride = null) {
-  if (!voiceInputBtn) return;
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
-    voiceInputBtn.disabled = true;
-    voiceInputBtn.title = t.voiceUnsupported;
-    setVoiceStatus(t.voiceUnsupported, true);
+    if (voiceInputBtn) { voiceInputBtn.disabled = true; voiceInputBtn.title = 'Voice not supported'; }
     return null;
   }
+  const rec = new SpeechRecognition();
+  rec.lang = langOverride || languageCode();
+  recognitionLangInUse = rec.lang;
+  rec.interimResults = true;
+  rec.continuous = false;
+  rec.maxAlternatives = 1;
 
-  const recognizer = new SpeechRecognition();
-  recognizer.lang = langOverride || languageCode();
-  recognitionLangInUse = recognizer.lang;
-  recognizer.interimResults = true;
-  recognizer.continuous = false;
-  recognizer.maxAlternatives = 1;
-
-  recognizer.onstart = () => {
-    const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+  rec.onstart = () => {
     clearTimeout(recognitionStartTimer);
-    isListening = true;
-    stopVoiceRequested = false;
-    voiceTranscript = '';
+    isListening = true; stopVoiceRequested = false; voiceTranscript = '';
     clearTimeout(recognitionFallbackTimer);
     if (APP_LANGUAGE === 'ta' && recognitionLangInUse === 'ta-IN') {
       recognitionFallbackTimer = setTimeout(() => {
         if (isListening && !voiceTranscript && !chatInput.value.trim()) {
-          try {
-            stopVoiceRequested = true;
-            recognition.stop();
-          } catch (_) {}
+          try { stopVoiceRequested = true; recognition.stop(); } catch(_) {}
           setTimeout(() => {
-            try {
-              stopVoiceRequested = false;
-              startRecognition('en-IN');
-              setVoiceStatus('தமிழ் குரல் உள்ளீடு கிடைக்கவில்லை. English recognition மூலம் மீண்டும் கேட்கிறது...');
-            } catch (_) {
-              setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).voiceTryAgain, true);
-            }
+            try { stopVoiceRequested = false; startRecognition('en-IN'); setVoiceStatus('Tamil voice unavailable — retrying in English…'); } catch(_) {}
           }, 250);
         }
       }, 3500);
     }
-    stopSpeaking();
     updateVoiceButton();
-    setVoiceStatus(t.listening);
+    setVoiceStatus(t('listening'));
   };
 
-  recognizer.onresult = event => {
-    clearTimeout(voiceAutoStopTimer);
-    clearTimeout(recognitionFallbackTimer);
-    let finalText = voiceTranscript;
-    let interimText = '';
-    for (let i = event.resultIndex; i < event.results.length; i += 1) {
-      const transcript = event.results[i][0].transcript.trim();
-      if (event.results[i].isFinal) finalText = `${finalText} ${transcript}`.trim();
-      else interimText = `${interimText} ${transcript}`.trim();
+  rec.onresult = event => {
+    clearTimeout(voiceAutoStopTimer); clearTimeout(recognitionFallbackTimer);
+    let finalText = voiceTranscript, interimText = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const tr = event.results[i][0].transcript.trim();
+      if (event.results[i].isFinal) finalText = `${finalText} ${tr}`.trim();
+      else interimText = `${interimText} ${tr}`.trim();
     }
     voiceTranscript = finalText;
-    const spokenText = (finalText || interimText).trim();
-    if (spokenText) chatInput.value = spokenText;
-    chatInput.focus();
-    chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
-    if (spokenText) {
-      setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).heard(spokenText));
-    }
+    const spoken = (finalText || interimText).trim();
+    if (spoken) { chatInput.value = spoken; chatInput.focus(); setVoiceStatus(t('heard')(spoken)); }
   };
 
-  recognizer.onspeechend = () => {
+  rec.onspeechend = () => {
     clearTimeout(voiceAutoStopTimer);
-    voiceAutoStopTimer = setTimeout(() => {
-      if (recognition && isListening) {
-        try { recognition.stop(); } catch (_) {}
-      }
-    }, 900);
+    voiceAutoStopTimer = setTimeout(() => { if (recognition && isListening) { try { recognition.stop(); } catch(_) {} } }, 900);
   };
 
-  recognizer.onerror = event => {
-    clearTimeout(voiceAutoStopTimer);
-    clearTimeout(recognitionFallbackTimer);
-    const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
-    clearTimeout(recognitionStartTimer);
-    const isPermissionError = event.error === 'not-allowed' || event.error === 'service-not-allowed';
-    const canRetryInEnglish = APP_LANGUAGE === 'ta' && recognitionLangInUse === 'ta-IN' && !voiceTranscript && !isPermissionError;
-    if (canRetryInEnglish) {
-      try {
-        recognition = createSpeechRecognition('en-IN');
-        recognition.start();
-        setVoiceStatus('தமிழ் குரல் உள்ளீடு கிடைக்கவில்லை. English recognition மூலம் மீண்டும் கேட்கிறது...');
-        return;
-      } catch (_) {}
+  rec.onerror = event => {
+    clearTimeout(voiceAutoStopTimer); clearTimeout(recognitionFallbackTimer); clearTimeout(recognitionStartTimer);
+    const isPermission = event.error === 'not-allowed' || event.error === 'service-not-allowed';
+    const canRetry = APP_LANGUAGE === 'ta' && recognitionLangInUse === 'ta-IN' && !voiceTranscript && !isPermission;
+    if (canRetry) {
+      try { recognition = createSpeechRecognition('en-IN'); recognition.start(); setVoiceStatus('Retrying in English…'); return; } catch(_) {}
     }
-    const msg = isPermissionError ? t.micPermission : t.voiceTryAgain;
-    isListening = false;
-    stopVoiceRequested = true;
+    isListening = false; stopVoiceRequested = true;
     updateVoiceButton();
-    setVoiceStatus(msg, true);
+    setVoiceStatus(isPermission ? t('micPermission') : t('voiceTryAgain'), true);
   };
 
-  recognizer.onend = () => {
-    clearTimeout(voiceAutoStopTimer);
-    clearTimeout(recognitionFallbackTimer);
-    clearTimeout(recognitionStartTimer);
-    const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
+  rec.onend = () => {
+    clearTimeout(voiceAutoStopTimer); clearTimeout(recognitionFallbackTimer); clearTimeout(recognitionStartTimer);
     const text = (voiceTranscript || chatInput.value).trim();
     const shouldSend = isListening && !stopVoiceRequested && text;
-    isListening = false;
-    updateVoiceButton();
-    if (shouldSend) {
-      setVoiceStatus(t.voiceSending);
-      sendMessage(text);
-    } else if (!text && !stopVoiceRequested) {
-      setVoiceStatus(t.noSpeech, true);
-    } else {
-      setVoiceStatus(t.voiceStopped);
-    }
+    isListening = false; updateVoiceButton();
+    if (shouldSend)         { setVoiceStatus(t('voiceSending')); sendMessage(text); }
+    else if (!text && !stopVoiceRequested) setVoiceStatus(t('noSpeech'), true);
+    else                    setVoiceStatus(t('voiceStopped'));
   };
 
-  return recognizer;
+  return rec;
 }
 
-function initVoiceInput() {
-  recognition = createSpeechRecognition();
-}
+function initVoiceInput() { recognition = createSpeechRecognition(); }
 
 function startRecognition(langOverride = null) {
   recognition = createSpeechRecognition(langOverride);
@@ -1126,10 +832,10 @@ function startRecognition(langOverride = null) {
   clearTimeout(recognitionStartTimer);
   recognitionStartTimer = setTimeout(() => {
     if (!isListening) {
-      try { recognition.abort(); } catch (_) {}
+      try { recognition.abort(); } catch(_) {}
       recognition = createSpeechRecognition();
       updateVoiceButton();
-      setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).voiceTryAgain, true);
+      setVoiceStatus(t('voiceTryAgain'), true);
     }
   }, 2500);
 }
@@ -1138,296 +844,50 @@ async function toggleVoiceInput() {
   if (!recognition || isProcessing) return;
   if (isListening) {
     stopVoiceRequested = true;
-    clearTimeout(voiceAutoStopTimer);
-    clearTimeout(recognitionFallbackTimer);
-    clearTimeout(recognitionStartTimer);
-    recognition.stop();
-    return;
+    clearTimeout(voiceAutoStopTimer); clearTimeout(recognitionFallbackTimer); clearTimeout(recognitionStartTimer);
+    recognition.stop(); return;
   }
   try {
-    const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
-    setVoiceStatus(t.voiceStarting);
-    stopVoiceRequested = false;
-    voiceTranscript = '';
-    clearTimeout(voiceAutoStopTimer);
-    clearTimeout(recognitionFallbackTimer);
-    clearTimeout(recognitionStartTimer);
+    setVoiceStatus('Starting microphone…');
+    stopVoiceRequested = false; voiceTranscript = '';
+    clearTimeout(voiceAutoStopTimer); clearTimeout(recognitionFallbackTimer); clearTimeout(recognitionStartTimer);
     chatInput.value = '';
     startRecognition();
-  } catch (err) {
-    if (err && err.name === 'InvalidStateError' && recognition) {
-      try { recognition.stop(); } catch (_) {}
-      setTimeout(() => {
-        try {
-          stopVoiceRequested = false;
-          startRecognition(APP_LANGUAGE === 'ta' ? 'en-IN' : null);
-        } catch (_) {
-          setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).voiceTryAgain, true);
-        }
-      }, 250);
+  } catch(err) {
+    if (err?.name === 'InvalidStateError' && recognition) {
+      try { recognition.stop(); } catch(_) {}
+      setTimeout(() => { try { stopVoiceRequested = false; startRecognition(); } catch(_) { setVoiceStatus(t('voiceTryAgain'), true); } }, 250);
       return;
     }
-    updateVoiceButton();
-    setVoiceStatus((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).voiceTryAgain, true);
+    updateVoiceButton(); setVoiceStatus(t('voiceTryAgain'), true);
   }
 }
 
-function createWelcomeChips() {
-  const wrap = document.createElement('div');
-  wrap.className = 'welcome-chips';
-  const queries = APP_LANGUAGE === 'ta' ? WELCOME_QUERIES_TA : WELCOME_QUERIES;
-  queries.forEach(query => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'welcome-chip';
-    btn.textContent = query;
-    btn.addEventListener('click', () => { chatInput.value = query; chatInput.focus(); });
-    wrap.appendChild(btn);
-  });
-  return wrap;
+// ── Language Toggle ────────────────────────────────────────────────────
+function applyPageLanguage() {
+  document.documentElement.lang = APP_LANGUAGE;
+  if (languageToggle) languageToggle.classList.toggle('tamil-mode', APP_LANGUAGE === 'ta');
+  if (chatInput)     chatInput.placeholder = t('chatPlaceholder');
+  setVoiceStatus(t('voiceFooter'));
+  if (weatherEmpty && weatherContent?.hidden) weatherEmpty.textContent = t('weatherEmpty');
+  if (latestWeatherData && weatherContent && !weatherContent.hidden) renderWeather(latestWeatherData);
+  if (recognition) recognition.lang = languageCode();
 }
 
-function renderMessage(text, role, animate = true, isWelcome = false) {
-  const row = document.createElement('div');
-  row.className = `msg-row ${role === 'user' ? 'user-row' : 'bot-row'}`;
-  const avatar = document.createElement('div');
-  avatar.className = `msg-avatar ${role === 'user' ? 'user-avatar' : 'bot-avatar'}`;
-  avatar.textContent = role === 'user' ? '👤' : '🌿';
-  const content = document.createElement('div');
-  content.className = 'msg-content';
-  const bubble = document.createElement('div');
-  bubble.className = `msg-bubble ${role === 'user' ? 'user-bubble' : 'bot-bubble'}`;
-  bubble.innerHTML = role === 'user' ? text : parseMarkdown(removeFollowupMarker(text));
-  const bottomBar = document.createElement('div');
-  bottomBar.className = 'msg-bottom';
-  bottomBar.innerHTML = `<span class="msg-time">${getTime()}</span>`;
-  if (role === 'bot') {
-    const speakBtn = document.createElement('button');
-    speakBtn.className = 'msg-tts-btn';
-    speakBtn.type = 'button';
-    speakBtn.title = 'Read this reply aloud';
-    speakBtn.textContent = '🔈';
-    speakBtn.addEventListener('click', () => {
-      if (currentUtterance || speechQueue.length) stopSpeaking();
-      else speakText(text);
-    });
-    bottomBar.appendChild(speakBtn);
-  }
-  content.appendChild(bubble);
-  if (role === 'bot' && isWelcome) content.appendChild(createWelcomeChips());
-  if (role === 'bot') {
-    const chips = extractFollowupChips(text);
-    if (chips.length) {
-      const chipContainer = document.createElement('div');
-      chipContainer.className = 'followup-chips';
-      chips.forEach(chip => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'followup-chip';
-        btn.textContent = chip;
-        btn.addEventListener('click', () => { chatInput.value = chip; chatInput.focus(); });
-        chipContainer.appendChild(btn);
-      });
-      content.appendChild(chipContainer);
-    }
-  }
-  content.appendChild(bottomBar);
-  row.appendChild(avatar);
-  row.appendChild(content);
-  messagesList.appendChild(row);
-  messagesWrap.scrollTop = messagesWrap.scrollHeight;
-  if (role === 'bot' && ttsEnabled) speakText(text);
+function toggleLanguage() {
+  APP_LANGUAGE = APP_LANGUAGE === 'ta' ? 'en' : 'ta';
+  localStorage.setItem('sf_language', APP_LANGUAGE);
+  applyPageLanguage();
+  renderWelcome();
 }
 
-let typingEl = null;
-function showTyping() {
-  if (typingEl) return;
-  typingEl = document.createElement('div');
-  typingEl.className = 'msg-row typing-row bot-row';
-  typingEl.innerHTML = `<div class="msg-avatar bot-avatar">🌿</div><div class="typing-bubble"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div><span class="typing-label">Thinking...</span></div>`;
-  messagesList.appendChild(typingEl);
-  messagesWrap.scrollTop = messagesWrap.scrollHeight;
-}
-function hideTyping() { if (typingEl) { typingEl.remove(); typingEl = null; } }
-
-async function sendMessage(text) {
-  if (isProcessing || !text.trim()) return;
-  isProcessing = true;
-  renderMessage(text, 'user');
-  chatInput.value = '';
-  sendBtn.disabled = true;
-  showTyping();
-  try {
-    const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text, session_id: SESSION_ID, language: APP_LANGUAGE }) });
-    const data = await res.json();
-    if (data.session_id) { SESSION_ID = data.session_id; localStorage.setItem('sf_session', SESSION_ID); }
-    if (data.memory) updateContextUI(data.memory);
-    hideTyping();
-    renderMessage(data.text || (APP_LANGUAGE === 'ta' ? 'பதில் கிடைக்கவில்லை.' : 'No response received.'), 'bot');
-  } catch (_) {
-    hideTyping();
-    renderMessage(APP_LANGUAGE === 'ta' ? 'இணைப்பு பிழை. சேவையகம் இயங்குகிறதா என சரிபார்க்கவும்.' : 'Connection error. Please check if the server is running.', 'bot');
-  } finally {
-    isProcessing = false;
-    sendBtn.disabled = false;
-    chatInput.focus();
-  }
-}
-
-async function analyzeSoilImage(file) {
-  if (!file || isProcessing) return;
-  isProcessing = true;
-  renderMessage(`📸 Uploaded: ${file.name}`, 'user');
-  showTyping();
-  if (soilPreviewName) soilPreviewName.textContent = `Analyzing ${file.name}...`;
-  if (soilStrip) soilStrip.style.display = 'flex';
-  const form = new FormData();
-  form.append('image', file);
-  form.append('session_id', SESSION_ID || '');
-  form.append('language', APP_LANGUAGE);
-  if (activeContext.district) form.append('district', activeContext.district);
-  try {
-    const res = await fetch('/soil', { method: 'POST', body: form });
-    const data = await res.json();
-    if (data.session_id) { SESSION_ID = data.session_id; localStorage.setItem('sf_session', SESSION_ID); }
-    if (data.memory) updateContextUI(data.memory);
-    if (soilPreviewName) soilPreviewName.textContent = data.soil_type ? `Detected: ${data.soil_type}` : `Could not analyze ${file.name}`;
-    hideTyping();
-    const err = data.error ? (data.detail ? `${data.error}\n(${data.detail})` : data.error) : null;
-    renderMessage(err ? `❌ ${err}` : data.text, 'bot');
-  } catch (_) {
-    if (soilPreviewName) soilPreviewName.textContent = `Upload failed: ${file.name}`;
-    hideTyping();
-    renderMessage(APP_LANGUAGE === 'ta' ? 'மண் படத்தை பதிவேற்ற முடியவில்லை.' : 'Soil image upload failed.', 'bot');
-  } finally {
-    isProcessing = false;
-    soilImageInput.value = '';
-    sendBtn.disabled = false;
-  }
-}
-
-function updateWhatIfLabels() {
-  const t = UI_TEXT[APP_LANGUAGE] || UI_TEXT.en;
-  if (whatifIrrVal && whatifIrrSlider) whatifIrrVal.textContent = `${parseInt(whatifIrrSlider.value)}%`;
-  if (whatifRainVal && whatifRainSlider) whatifRainVal.textContent = `${parseInt(whatifRainSlider.value)} mm`;
-  if (whatifFertVal && whatifFertSlider) whatifFertVal.textContent = `${parseInt(whatifFertSlider.value)}%`;
-  if (whatifTempVal && whatifTempSlider) whatifTempVal.textContent = `${parseInt(whatifTempSlider.value)} C`;
-  if (whatifPestVal && whatifPestSlider) whatifPestVal.textContent = `${parseInt(whatifPestSlider.value)}%`;
-  if (whatifMoistureVal && whatifMoistureSlider) whatifMoistureVal.textContent = `${parseInt(whatifMoistureSlider.value)}%`;
-  if (simulateBtn) simulateBtn.textContent = activeContext.district ? t.simulateFor(activeContext.district) : t.simulate;
-}
-
-function formatSimulationResponse(data, payload) {
-  const crop = data.crop || payload.crop || 'Current crop';
-  const district = data.district || payload.district;
-  const yieldImpact = Number(data.yield_impact_pct || 0);
-  const pestChange = Number(data.pest_risk_change_pct || 0);
-  const yieldDirection = yieldImpact > 0 ? 'increase' : (yieldImpact < 0 ? 'decrease' : 'stay nearly stable');
-  const pestDirection = pestChange > 0 ? 'increase' : (pestChange < 0 ? 'decrease' : 'stay nearly stable');
-  return `## What-If Simulation: ${crop} in ${district}
-
-### Scenario Inputs
-- Rainfall change: **${payload.rainfall_delta_mm} mm**
-- Irrigation change: **${payload.irrigation_delta_pct}%**
-- Fertilizer change: **${payload.fertilizer_delta_pct}%**
-- Temperature change: **${payload.temperature_delta_c} C**
-- Pest intensity: **${payload.pest_intensity_pct}%**
-- Soil moisture: **${payload.soil_moisture_pct}%**
-
-### Expected Result
-- Expected yield impact: **${yieldImpact}%**. Yield may **${yieldDirection}** under this scenario.
-- Pest risk change: **${pestChange}%**. Pest pressure may **${pestDirection}**.
-
-### Recommended Action
-${data.recommended_action || 'Monitor field conditions and adjust irrigation, fertilizer, and pest scouting based on local observations.'}`;
-}
-
-async function sendSimulation() {
-  const district = activeContext.district;
-  if (!district) {
-    renderMessage((UI_TEXT[APP_LANGUAGE] || UI_TEXT.en).noDistrictSimulation, 'bot');
-    return;
-  }
-  const payload = {
-    district,
-    crop: activeContext.crop,
-    soil: activeContext.soil,
-    season: activeContext.season,
-    irrigation_delta_pct: parseInt(whatifIrrSlider.value || 0),
-    rainfall_delta_mm: parseInt(whatifRainSlider.value || 0),
-    fertilizer_delta_pct: parseInt(whatifFertSlider.value || 0),
-    temperature_delta_c: parseInt(whatifTempSlider.value || 0),
-    pest_intensity_pct: parseInt(whatifPestSlider.value || 0),
-    soil_moisture_pct: parseInt(whatifMoistureSlider.value || 55),
-    language: APP_LANGUAGE,
-  };
-  const scenarioText = APP_LANGUAGE === 'ta'
-    ? `${district} மாவட்டத்தில் ${payload.crop || 'தேர்ந்தெடுத்த பயிர்'} பயிருக்கு என்ன ஆகும்? சோதனை: மழை ${payload.rainfall_delta_mm} மில்லிமீட்டர், பாசனம் ${payload.irrigation_delta_pct}%, உரம் ${payload.fertilizer_delta_pct}%, வெப்பநிலை ${payload.temperature_delta_c} C, பூச்சி தீவிரம் ${payload.pest_intensity_pct}%, மண் ஈரப்பதம் ${payload.soil_moisture_pct}%.`
-    : `Run what-if simulation for ${payload.crop || 'current crop'} in ${district}: rainfall ${payload.rainfall_delta_mm} mm, irrigation ${payload.irrigation_delta_pct}%, fertilizer ${payload.fertilizer_delta_pct}%, temperature ${payload.temperature_delta_c} C, pest intensity ${payload.pest_intensity_pct}%, soil moisture ${payload.soil_moisture_pct}%.`;
-  renderMessage(scenarioText, 'user');
-  showTyping();
-  if (simulateBtn) simulateBtn.disabled = true;
-  try {
-    const res = await fetch('/simulate_advanced', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || 'Simulation failed');
-    hideTyping();
-    renderMessage(data.text || formatSimulationResponse(data, payload), 'bot');
-  } catch (err) {
-    hideTyping();
-    renderMessage(APP_LANGUAGE === 'ta' ? 'சோதனை இப்போது கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்.' : `Simulation unavailable: ${err.message || 'Please try again.'}`, 'bot');
-  } finally {
-    if (simulateBtn) simulateBtn.disabled = false;
-  }
-}
-
-async function resetAllOnLoad() {
-  if (chatInput) chatInput.value = '';
-  if (soilStrip) soilStrip.style.display = 'none';
-  if (soilPreviewImg) soilPreviewImg.src = '';
-  if (soilPreviewName) soilPreviewName.textContent = '';
-  if (soilImageInput) soilImageInput.value = '';
-  if (whatifIrrSlider) whatifIrrSlider.value = '0';
-  if (whatifRainSlider) whatifRainSlider.value = '0';
-  messagesList.innerHTML = '';
-}
-
-async function restoreSessionOnLoad() {
-  await resetAllOnLoad();
-  if (!SESSION_ID) {
-    clearContextUI();
-    return false;
-  }
-  try {
-    const res = await fetch(`/session?session_id=${encodeURIComponent(SESSION_ID)}`);
-    const data = await res.json();
-    if (data && data.memory) updateContextUI(data.memory);
-    if (Array.isArray(data.messages) && data.messages.length) {
-      messagesList.innerHTML = '';
-      data.messages.forEach(item => {
-        if (item && item.text && (item.role === 'user' || item.role === 'bot')) {
-          renderMessage(item.text, item.role, false, false);
-        }
-      });
-      return true;
-    }
-  } catch (_) {
-    updateContextUI(activeContext);
-  }
-  return false;
-}
-
+// ── Session / Reset ────────────────────────────────────────────────────
 async function clearChat() {
   messagesList.innerHTML = '';
-  const oldSession = SESSION_ID;
-  SESSION_ID = null;
-  localStorage.removeItem('sf_session');
+  const old = SESSION_ID;
+  SESSION_ID = null; localStorage.removeItem('sf_session');
   clearContextUI();
-  if (oldSession) { try { await fetch('/reset_session', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ session_id: oldSession })}); } catch (_) {} }
+  if (old) { try { await fetch('/reset_session', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ session_id: old }) }); } catch(_) {} }
   renderWelcome();
 }
 
@@ -1436,67 +896,485 @@ function renderWelcome() {
   renderMessage(APP_LANGUAGE === 'ta' ? INTRO_MESSAGE_TA : INTRO_MESSAGE, 'bot', true, true);
 }
 
+async function restoreSessionOnLoad() {
+  chatInput.value = '';
+  if (soilStrip) soilStrip.style.display = 'none';
+  if (soilImageInput) soilImageInput.value = '';
+  updateWhatIfLabels();
+  if (!SESSION_ID) { clearContextUI(); return false; }
+  try {
+    const res  = await fetch(`/session?session_id=${encodeURIComponent(SESSION_ID)}`);
+    const data = await res.json();
+    if (data?.memory) updateContextUI(data.memory);
+    if (Array.isArray(data.messages) && data.messages.length) {
+      messagesList.innerHTML = '';
+      data.messages.forEach(item => {
+        if (item?.text && (item.role === 'user' || item.role === 'bot'))
+          renderMessage(item.text, item.role, false, false);
+      });
+      return true;
+    }
+  } catch (_) { updateContextUI(activeContext); }
+  return false;
+}
+
+// ── Sidebar Toggle ─────────────────────────────────────────────────────
 function setSidebarOpen(open) {
   if (!sidebar) return;
   sidebar.classList.toggle('open', Boolean(open));
   if (sidebarToggle) sidebarToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (sidebarBackdrop) sidebarBackdrop.style.opacity = open ? '1' : '0';
+  if (sidebarBackdrop) sidebarBackdrop.style.pointerEvents = open ? 'auto' : 'none';
 }
 
+// ── Event Listeners ────────────────────────────────────────────────────
 sendBtn.addEventListener('click', () => sendMessage(chatInput.value.trim()));
-chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(chatInput.value.trim()); } });
-if (voiceInputBtn) voiceInputBtn.addEventListener('click', toggleVoiceInput);
+chatInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(chatInput.value.trim()); }
+});
+if (voiceInputBtn)  voiceInputBtn.addEventListener('click', toggleVoiceInput);
 if (languageToggle) languageToggle.addEventListener('click', toggleLanguage);
 clearChatBtn.addEventListener('click', clearChat);
 sidebarToggle.addEventListener('click', () => setSidebarOpen(!sidebar.classList.contains('open')));
 if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', () => setSidebarOpen(false));
-if (chatMenuBtn) chatMenuBtn.addEventListener('click', e => {
-  e.stopPropagation();
-  setChatMenuOpen(chatMenuPanel.hidden);
-});
-if (chatMenuPanel) chatMenuPanel.addEventListener('click', () => setChatMenuOpen(false));
-if (ttsBtnGlobal) ttsBtnGlobal.addEventListener('click', toggleGlobalTTS);
-if (soilImageInput) soilImageInput.addEventListener('change', () => { const file = soilImageInput.files[0]; if (file) analyzeSoilImage(file); });
 if (removeImgBtn) removeImgBtn.addEventListener('click', () => {
-  soilStrip.style.display = 'none';
-  if (soilPreviewImg) soilPreviewImg.src = '';
-  soilImageInput.value = '';
+  if (soilStrip) soilStrip.style.display = 'none';
+  if (soilImageInput) soilImageInput.value = '';
 });
-if (whatifIrrSlider) whatifIrrSlider.addEventListener('input', updateWhatIfLabels);
-if (whatifRainSlider) whatifRainSlider.addEventListener('input', updateWhatIfLabels);
-if (whatifFertSlider) whatifFertSlider.addEventListener('input', updateWhatIfLabels);
-if (whatifTempSlider) whatifTempSlider.addEventListener('input', updateWhatIfLabels);
-if (whatifPestSlider) whatifPestSlider.addEventListener('input', updateWhatIfLabels);
+if (soilImageInput) soilImageInput.addEventListener('change', () => {
+  const file = soilImageInput.files[0];
+  if (file) analyzeSoilImage(file);
+});
+if (whatifIrrSlider)      whatifIrrSlider.addEventListener('input', updateWhatIfLabels);
+if (whatifRainSlider)     whatifRainSlider.addEventListener('input', updateWhatIfLabels);
+if (whatifFertSlider)     whatifFertSlider.addEventListener('input', updateWhatIfLabels);
+if (whatifTempSlider)     whatifTempSlider.addEventListener('input', updateWhatIfLabels);
+if (whatifPestSlider)     whatifPestSlider.addEventListener('input', updateWhatIfLabels);
 if (whatifMoistureSlider) whatifMoistureSlider.addEventListener('input', updateWhatIfLabels);
-if (simulateBtn) simulateBtn.addEventListener('click', sendSimulation);
-if (applyContextBtn) applyContextBtn.addEventListener('click', applyManualContext);
-if (resetContextBtn) resetContextBtn.addEventListener('click', resetManualContext);
-if (manualMonth) manualMonth.addEventListener('change', syncSeasonFromMonth);
-if (manualSeason) manualSeason.addEventListener('change', syncMonthFromSeason);
-if (window.speechSynthesis) {
-  loadPreferredVoice();
-  speechSynthesis.onvoiceschanged = () => loadPreferredVoice(currentSpeechLang || languageCode());
-}
-initVoiceInput();
+if (simulateBtn)      simulateBtn.addEventListener('click', sendSimulation);
+if (applyContextBtn)  applyContextBtn.addEventListener('click', applyManualContext);
+if (resetContextBtn)  resetContextBtn.addEventListener('click', resetManualContext);
+if (manualMonth)      manualMonth.addEventListener('change', syncSeasonFromMonth);
+if (manualSeason)     manualSeason.addEventListener('change', syncMonthFromSeason);
 
 document.addEventListener('click', e => {
-  if (chatMenuPanel && !chatMenuPanel.hidden && !e.target.closest('.chat-menu')) {
-    setChatMenuOpen(false);
-  }
-  if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
+  if (window.innerWidth <= 768 && sidebar?.classList.contains('open')) {
     if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target)) setSidebarOpen(false);
   }
 });
-
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') setChatMenuOpen(false);
-  if (e.key === 'Escape' && sidebar && sidebar.classList.contains('open')) setSidebarOpen(false);
+  if (e.key === 'Escape' && sidebar?.classList.contains('open')) setSidebarOpen(false);
 });
 
+// ── Init ──────────────────────────────────────────────────────────────
 (async function init() {
-  const restoredChat = await restoreSessionOnLoad();
-  updateLanguageUI();
-  updateTTSButton();
-  updateWhatIfLabels();
-  if (!restoredChat) renderWelcome();
+  applyPageLanguage();
+  initVoiceInput();
+  const restored = await restoreSessionOnLoad();
+  if (!restored) renderWelcome();
   chatInput.focus();
+  initPriceModal();
+  initSoilModal();
+  initChatMenu();
 })();
+
+// ── Chat Menu (tools icon in input area) ─────────────────────────────
+function initChatMenu() {
+  const menuBtn     = document.getElementById('chatMenuBtn');
+  const menuPanel   = document.getElementById('chatMenuPanel');
+  const priceToolBtn = document.getElementById('chatToolPriceBtn');
+  const soilToolBtn  = document.getElementById('chatToolSoilBtn');
+
+  if (!menuBtn || !menuPanel) return;
+
+  function openMenu() {
+    menuPanel.hidden = false;
+    menuBtn.setAttribute('aria-expanded', 'true');
+    menuPanel.classList.add('menu-visible');
+  }
+  function closeMenu() {
+    menuPanel.hidden = true;
+    menuBtn.setAttribute('aria-expanded', 'false');
+    menuPanel.classList.remove('menu-visible');
+  }
+
+  menuBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    menuPanel.hidden ? openMenu() : closeMenu();
+  });
+
+  // Close on outside click
+  document.addEventListener('click', e => {
+    if (!menuPanel.hidden && !menuPanel.contains(e.target) && e.target !== menuBtn) {
+      closeMenu();
+    }
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !menuPanel.hidden) closeMenu(); });
+
+  priceToolBtn?.addEventListener('click', () => {
+    closeMenu();
+    if (window._openPriceModal) window._openPriceModal();
+  });
+  soilToolBtn?.addEventListener('click', () => {
+    closeMenu();
+    if (window._openSoilModal) window._openSoilModal();
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// MARKET PRICE MODAL
+// ════════════════════════════════════════════════════════════════════════
+let _priceLastData = null;
+
+function initPriceModal() {
+  const overlay       = document.getElementById('priceModalOverlay');
+  const openBtn       = document.getElementById('openPriceModal');
+  const closeBtn      = document.getElementById('closePriceModal');
+  const commoditySel  = document.getElementById('priceCommoditySelect');
+  const districtSel   = document.getElementById('priceDistrictSelect');
+  const fetchBtn      = document.getElementById('priceFetchBtn');
+  const resultArea    = document.getElementById('priceResultArea');
+  const cardsGrid     = document.getElementById('priceCardsGrid');
+  const dateBadge     = document.getElementById('priceDateBadge');
+  const emptyEl       = document.getElementById('priceEmpty');
+  const errorEl       = document.getElementById('priceError');
+  const loadingEl     = document.getElementById('priceLoading');
+  const addChatBtn    = document.getElementById('priceAddChatBtn');
+
+  // openBtn is optional (no longer in topbar; opened via chat-menu tool cards)
+  if (!overlay) return;
+
+  // ── Open / Close ─────────────────────────────────────────────────────
+  function openPriceModal() {
+    overlay.hidden = false;
+    document.body.style.overflow = 'hidden';
+    populatePriceDropdowns();
+    // Pre-fill commodity from active context (crop)
+    if (activeContext.crop && commoditySel) {
+      const val = activeContext.crop;
+      [...commoditySel.options].forEach(opt => {
+        if (opt.value.toLowerCase().includes(val.toLowerCase())) commoditySel.value = opt.value;
+      });
+    }
+  }
+  function closePriceModal() {
+    overlay.hidden = true;
+    document.body.style.overflow = '';
+  }
+  openBtn?.addEventListener('click', openPriceModal);
+  closeBtn?.addEventListener('click', closePriceModal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closePriceModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !overlay.hidden) closePriceModal(); });
+  document.querySelectorAll('.trigger-price-modal').forEach(btn => {
+    btn.addEventListener('click', openPriceModal);
+  });
+
+  // ── Populate Dropdowns ───────────────────────────────────────────────
+  let _dropdownsLoaded = false;
+  async function populatePriceDropdowns() {
+    if (_dropdownsLoaded) return;
+    try {
+      const res  = await fetch('/api/price_commodities');
+      const data = await res.json();
+      if (data.commodities && commoditySel) {
+        data.commodities.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c;
+          opt.textContent = c;
+          commoditySel.appendChild(opt);
+        });
+      }
+      if (data.districts && districtSel) {
+        data.districts.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = d;
+          districtSel.appendChild(opt);
+        });
+      }
+      _dropdownsLoaded = true;
+    } catch (e) {
+      console.warn('Could not load price commodities:', e);
+    }
+  }
+
+  // ── Fetch Prices ─────────────────────────────────────────────────────
+  async function fetchPrices() {
+    const commodity = commoditySel?.value || '';
+    if (!commodity) {
+      showPriceError('Please select a commodity first.');
+      return;
+    }
+    const district = districtSel?.value || '';
+    let url = `/api/price?commodity=${encodeURIComponent(commodity)}`;
+    if (district) url += `&district=${encodeURIComponent(district)}`;
+
+    setPriceState('loading');
+    try {
+      const res  = await fetch(url);
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        showPriceError(data.error || 'Failed to fetch price data.');
+        return;
+      }
+      _priceLastData = data;
+      renderPriceCards(data);
+    } catch (e) {
+      showPriceError('Network error. Is the server running?');
+    }
+  }
+
+  function setPriceState(state) {
+    emptyEl.hidden    = (state !== 'empty');
+    errorEl.hidden    = (state !== 'error');
+    loadingEl.hidden  = (state !== 'loading');
+    resultArea.hidden = (state !== 'result');
+    if (state === 'empty') emptyEl.hidden = false;
+  }
+  function showPriceError(msg) {
+    setPriceState('error');
+    if (errorEl) { errorEl.hidden = false; errorEl.textContent = '❌ ' + msg; }
+  }
+
+  function renderPriceCards(data) {
+    setPriceState('result');
+    if (dateBadge) dateBadge.textContent = `Prices as of ${data.arrival_date || 'latest'}`;
+    if (cardsGrid) {
+      cardsGrid.innerHTML = '';
+      (data.records || []).forEach((r, i) => {
+        const card = document.createElement('div');
+        card.className = 'price-card';
+        card.style.animationDelay = `${i * 0.05}s`;
+        card.innerHTML = `
+          <div class="price-card-market" title="${r.market}">${r.market || '—'}</div>
+          <div class="price-card-commodity">${r.commodity}</div>
+          <div class="price-card-variety">${[r.variety, r.grade].filter(Boolean).join(' · ')}</div>
+          <div class="price-card-prices">
+            <div class="price-badge min">
+              <span class="price-badge-label">Min</span>
+              <span class="price-badge-value">₹${(r.min_price||0).toLocaleString('en-IN')}</span>
+              <span class="price-badge-unit">per quintal</span>
+            </div>
+            <div class="price-badge modal">
+              <span class="price-badge-label">Modal</span>
+              <span class="price-badge-value">₹${(r.modal_price||0).toLocaleString('en-IN')}</span>
+              <span class="price-badge-unit">per quintal</span>
+            </div>
+            <div class="price-badge max">
+              <span class="price-badge-label">Max</span>
+              <span class="price-badge-value">₹${(r.max_price||0).toLocaleString('en-IN')}</span>
+              <span class="price-badge-unit">per quintal</span>
+            </div>
+          </div>
+        `;
+        cardsGrid.appendChild(card);
+      });
+    }
+  }
+
+  fetchBtn?.addEventListener('click', fetchPrices);
+  commoditySel?.addEventListener('keydown', e => { if (e.key === 'Enter') fetchPrices(); });
+
+  // ── Add to Chat ──────────────────────────────────────────────────────
+  function buildPriceChatText(data) {
+    if (!data || !data.records?.length) return '';
+    const commodity = data.records[0]?.commodity || 'Commodity';
+    const date      = data.arrival_date || 'today';
+    let text = `### 📊 Market Prices: **${commodity}** (${date})\n\n`;
+    data.records.forEach(r => {
+      text += `**${r.market}** — Min: ₹${Number(r.min_price).toLocaleString('en-IN')} · Modal: ₹${Number(r.modal_price).toLocaleString('en-IN')} · Max: ₹${Number(r.max_price).toLocaleString('en-IN')} /quintal\n`;
+    });
+    text += `\n*Source: Agmarknet data.gov.in · Tamil Nadu*`;
+    return text;
+  }
+
+  addChatBtn?.addEventListener('click', () => {
+    const txt = buildPriceChatText(_priceLastData);
+    if (txt) {
+      renderMessage(txt, 'bot');
+      if (SESSION_ID) {
+        const hist = conversation_store_local_append({
+          role: 'bot', text: txt
+        });
+      }
+      closePriceModal();
+    }
+  });
+
+  // ── Expose openPriceModal so chat commands can call it ───────────────
+  window._openPriceModal   = openPriceModal;
+  window._fetchPriceFor    = async (commodity, district) => {
+    await populatePriceDropdowns();
+    if (commoditySel) {
+      [...commoditySel.options].forEach(opt => {
+        if (opt.value.toLowerCase().includes(commodity.toLowerCase())) commoditySel.value = opt.value;
+      });
+    }
+    if (district && districtSel) {
+      [...districtSel.options].forEach(opt => {
+        if (opt.value.toLowerCase().includes(district.toLowerCase())) districtSel.value = opt.value;
+      });
+    }
+    await fetchPrices();
+    return buildPriceChatText(_priceLastData);
+  };
+}
+
+// Helper: append to local conversation store without server
+function conversation_store_local_append(item) {
+  // We don't have direct JS access to server conversation_store,
+  // but the user can see the result in chat. This is intentional.
+}
+
+// ── Chat command shortcut handled inside sendMessage above ───────────
+
+// ════════════════════════════════════════════════════════════════════════
+// SOIL ID MODAL
+// ════════════════════════════════════════════════════════════════════════
+function initSoilModal() {
+  const overlay       = document.getElementById('soilModalOverlay');
+  const openBtn       = document.getElementById('openSoilModal');
+  const closeBtn      = document.getElementById('closeSoilModal');
+  const dropZone      = document.getElementById('soilDropZone');
+  const fileInput     = document.getElementById('soilModalFileInput');
+  const uploadInner   = document.getElementById('soilUploadInner');
+  const previewWrap   = document.getElementById('soilModalPreviewWrap');
+  const previewImg    = document.getElementById('soilModalPreviewImg');
+  const removeBtn     = document.getElementById('soilModalRemoveBtn');
+  const classifyBtn   = document.getElementById('soilClassifyBtn');
+  const resultArea    = document.getElementById('soilModalResultArea');
+  const loadingEl     = document.getElementById('soilModalLoading');
+
+  // openBtn is optional (no longer in topbar; opened via chat-menu tool cards)
+  if (!overlay) return;
+
+  let _soilFile = null;
+
+  function openSoilModal() {
+    overlay.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function closeSoilModal() {
+    overlay.hidden = true;
+    document.body.style.overflow = '';
+  }
+  openBtn?.addEventListener('click', openSoilModal);
+  closeBtn?.addEventListener('click', closeSoilModal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeSoilModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !overlay.hidden) closeSoilModal(); });
+  document.querySelectorAll('.trigger-soil-modal').forEach(btn => {
+    btn.addEventListener('click', openSoilModal);
+  });
+
+  // Expose for chat-menu
+  window._openSoilModal = openSoilModal;
+
+  // ── File Selection ───────────────────────────────────────────────────
+  function setSoilFile(file) {
+    if (!file) return;
+    _soilFile = file;
+    if (previewImg && previewWrap && uploadInner && classifyBtn) {
+      const url = URL.createObjectURL(file);
+      previewImg.src = url;
+      previewWrap.hidden = false;
+      uploadInner.style.display = 'none';
+      classifyBtn.disabled = false;
+    }
+    if (resultArea) { resultArea.hidden = true; resultArea.innerHTML = ''; }
+    if (loadingEl) loadingEl.hidden = true;
+  }
+
+  function clearSoilFile() {
+    _soilFile = null;
+    if (fileInput) fileInput.value = '';
+    if (previewImg) previewImg.src = '';
+    if (previewWrap) previewWrap.hidden = true;
+    if (uploadInner) uploadInner.style.display = '';
+    if (classifyBtn) classifyBtn.disabled = true;
+    if (resultArea) { resultArea.hidden = true; resultArea.innerHTML = ''; }
+    if (loadingEl) loadingEl.hidden = true;
+  }
+
+  fileInput?.addEventListener('change', () => { if (fileInput.files[0]) setSoilFile(fileInput.files[0]); });
+  removeBtn?.addEventListener('click', clearSoilFile);
+
+  // ── Drag & Drop ──────────────────────────────────────────────────────
+  dropZone?.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone?.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone?.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) setSoilFile(file);
+  });
+
+  // ── Classify ─────────────────────────────────────────────────────────
+  async function classifySoil() {
+    if (!_soilFile) return;
+    if (loadingEl) loadingEl.hidden = false;
+    if (resultArea) { resultArea.hidden = true; resultArea.innerHTML = ''; }
+    if (classifyBtn) classifyBtn.disabled = true;
+
+    const form = new FormData();
+    form.append('image', _soilFile);
+    form.append('session_id', SESSION_ID || '');
+    form.append('language', APP_LANGUAGE);
+    if (activeContext.district) form.append('district', activeContext.district);
+
+    try {
+      const res  = await fetch('/soil', { method: 'POST', body: form });
+      const data = await res.json();
+      if (data.session_id) { SESSION_ID = data.session_id; localStorage.setItem('sf_session', SESSION_ID); }
+      if (data.memory)     updateContextUI(data.memory);
+
+      if (loadingEl) loadingEl.hidden = true;
+      if (classifyBtn) classifyBtn.disabled = false;
+
+      if (data.error) {
+        if (resultArea) {
+          resultArea.innerHTML = `<div class="price-error">❌ ${data.error}${data.detail ? '<br><small>' + data.detail + '</small>' : ''}</div>`;
+          resultArea.hidden = false;
+        }
+        return;
+      }
+
+      renderSoilResult(data);
+    } catch (e) {
+      if (loadingEl) loadingEl.hidden = true;
+      if (classifyBtn) classifyBtn.disabled = false;
+      if (resultArea) {
+        resultArea.innerHTML = `<div class="price-error">❌ Network error: ${e.message}</div>`;
+        resultArea.hidden = false;
+      }
+    }
+  }
+
+  function renderSoilResult(data) {
+    if (!resultArea) return;
+    const soilType = data.soil_type || 'Unknown';
+    const fullText = data.text || '';
+    // Extract characteristics line from text (between ** ... ** pairs)
+    const charMatch = fullText.match(/\*\*Characteristics:\*\* (.+?)(?:\n|$)/);
+    const charText  = charMatch ? charMatch[1] : '';
+    const cropMatch = fullText.match(/\*\*Best matching crops[^:]*:\*\* (.+?)(?:\n|$)/);
+    const cropText  = cropMatch ? cropMatch[1] : '';
+
+    resultArea.innerHTML = `
+      <div class="soil-result-type">🌱 ${soilType}</div>
+      ${charText ? `<div class="soil-result-char">${charText}</div>` : ''}
+      ${cropText ? `<div class="soil-result-crops"><strong>Best crops:</strong> ${cropText}</div>` : ''}
+      <button class="soil-add-chat-btn" id="soilAddChatBtnResult" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Add to Chat
+      </button>
+    `;
+    resultArea.hidden = false;
+
+    document.getElementById('soilAddChatBtnResult')?.addEventListener('click', () => {
+      renderMessage(fullText, 'bot');
+      closeSoilModal();
+    });
+  }
+
+  classifyBtn?.addEventListener('click', classifySoil);
+}

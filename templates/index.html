@@ -1,6 +1,6 @@
-﻿
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,166 +8,410 @@
     <meta name="description" content="AI-powered smart farming chatbot for Tamil Nadu.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+Tamil:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+Tamil:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=999">
 </head>
+
 <body>
-<a class="skip-link" href="#chatInput">Skip to chat input</a>
-<div class="bg-canvas">
-    <div class="bg-gradient"></div>
-    <div class="blob blob-1"></div>
-    <div class="blob blob-2"></div>
-    <div class="blob blob-3"></div>
-    <div class="grid-overlay"></div>
-</div>
-<div class="app-shell">
-    <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-logo">
-            <div class="logo-icon">🌿</div>
-            <div class="logo-text">
-                <span class="logo-title">Smart-Agri</span>
-                <span class="logo-sub">Tamil Nadu Agricultural Intelligence</span>
-            </div>
-        </div>
-        <div class="sidebar-section">
-            <p class="sidebar-label">Soil Identification</p>
-            <div class="tool-card">
-                <p class="tool-help">Upload a soil photo to identify soil type and use it in follow-up queries.</p>
-                <label class="sidebar-upload-btn" for="soilImageInput"><span>Upload Soil Image</span></label>
-                <input type="file" id="soilImageInput" accept="image/*" hidden>
-                <div class="sidebar-soil-preview" id="soilPreviewStrip" style="display:none;">
-                    <div class="soil-status-icon" aria-hidden="true">✓</div>
-                    <span id="soilPreviewName">Analyzing soil...</span>
-                    <button class="remove-img-btn" id="removeImgBtn" title="Remove image">×</button>
+    <a class="skip-link" href="#chatInput">Skip to chat input</a>
+    <div class="bg-canvas">
+        <div class="bg-gradient"></div>
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+        <div class="grid-overlay"></div>
+    </div>
+    <div class="app-shell">
+        <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-logo">
+                <div class="logo-icon">🌿</div>
+                <div class="logo-text">
+                    <span class="logo-title">Smart-Agri</span>
+                    <span class="logo-sub">Tamil Nadu Agricultural Intelligence</span>
                 </div>
             </div>
-        </div>
-        <div class="sidebar-section">
-            <p class="sidebar-label">Manual Context</p>
-            <div class="manual-context-card">
-                <div class="manual-grid">
-                    <div class="manual-field"><label for="manualCrop">Crop</label><input type="text" id="manualCrop" placeholder="e.g. Rice"></div>
-                    <div class="manual-field"><label for="manualDistrict">Location</label><input type="text" id="manualDistrict" placeholder="e.g. Madurai"></div>
-                    <div class="manual-field"><label for="manualSoil">Soil</label>
-                        <select id="manualSoil">
-                            <option value="">Select soil</option>
-                            <option value="alluvial soil">Alluvial soil</option>
-                            <option value="black soil">Black soil</option>
-                            <option value="clay soil">Clay soil</option>
-                            <option value="red soil">Red soil</option>
-                        </select>
-                    </div>
-                    <div class="manual-field"><label for="manualMonth">Month</label>
-                        <select id="manualMonth">
-                            <option value="">Select month</option>
-                            <optgroup label="Winter">
-                                <option>January</option><option>February</option><option>December</option>
-                            </optgroup>
-                            <optgroup label="Summer">
-                                <option>March</option><option>April</option><option>May</option>
-                            </optgroup>
-                            <optgroup label="Kharif / Rainy">
-                                <option>June</option><option>July</option><option>August</option><option>September</option>
-                            </optgroup>
-                            <optgroup label="Rabi">
-                                <option>October</option><option>November</option>
-                            </optgroup>
-                        </select>
-                    </div>
-                    <div class="manual-field"><label for="manualSeason">Season</label>
-                        <select id="manualSeason"><option value="">Select season</option><option value="Winter">Winter</option><option value="Summer">Summer</option><option value="Kharif">Kharif / Rainy</option><option value="Rabi">Rabi</option><option value="Autumn">Autumn</option><option value="Whole Year">Whole Year / Perennial</option></select>
+            <div class="sidebar-section">
+                <p class="sidebar-label">Soil Identification</p>
+                <div class="tool-card">
+                    <p class="tool-help">Upload a soil photo to identify soil type and use it in follow-up queries.</p>
+                    <label class="sidebar-upload-btn" for="soilImageInput"><span>Upload Soil Image</span></label>
+                    <input type="file" id="soilImageInput" accept="image/*" hidden>
+                    <div class="sidebar-soil-preview" id="soilPreviewStrip" style="display:none;">
+                        <div class="soil-status-icon" aria-hidden="true">✓</div>
+                        <span id="soilPreviewName">Analyzing soil...</span>
+                        <button class="remove-img-btn" id="removeImgBtn" title="Remove image">×</button>
                     </div>
                 </div>
-                <div class="manual-actions"><button class="manual-btn apply-btn" id="applyContextBtn" type="button">Apply Context</button><button class="manual-btn reset-btn" id="resetContextBtn" type="button">Reset</button></div>
             </div>
-        </div>
-        <div class="sidebar-section">
-            <p class="sidebar-label">Active Context</p>
-            <div class="context-panel" id="contextPanel">
-                <div class="context-help">Current stored values used for follow-up questions.</div>
-                <div class="context-grid">
-                    <div class="context-item"><span class="context-key">Crop</span><strong id="ctxCrop">-</strong></div>
-                    <div class="context-item"><span class="context-key">Location</span><strong id="ctxDistrict">-</strong></div>
-                    <div class="context-item"><span class="context-key">Soil</span><strong id="ctxSoil">-</strong></div>
-                    <div class="context-item"><span class="context-key">Month</span><strong id="ctxMonth">-</strong></div>
-                    <div class="context-item"><span class="context-key">Season</span><strong id="ctxSeason">-</strong></div>
-                </div>
-            </div>
-        </div>
-        <div class="sidebar-section weather-section">
-            <p class="sidebar-label">Weather Updates</p>
-            <div class="weather-panel" id="weatherPanel">
-                <div class="weather-empty" id="weatherEmpty">Select or ask about a district to load live weather.</div>
-                <div class="weather-content" id="weatherContent" hidden>
-                    <div class="weather-head">
-                        <div>
-                            <span class="weather-district" id="weatherDistrict">-</span>
+            <div class="sidebar-section">
+                <p class="sidebar-label">Manual Context</p>
+                <div class="manual-context-card">
+                    <div class="manual-grid">
+                        <div class="manual-field"><label for="manualCrop">Crop</label><input type="text" id="manualCrop"
+                                placeholder="e.g. Rice"></div>
+                        <div class="manual-field"><label for="manualDistrict">Location</label><input type="text"
+                                id="manualDistrict" placeholder="e.g. Madurai"></div>
+                        <div class="manual-field"><label for="manualSoil">Soil</label>
+                            <select id="manualSoil">
+                                <option value="">Select soil</option>
+                                <option value="alluvial soil">Alluvial soil</option>
+                                <option value="black soil">Black soil</option>
+                                <option value="clay soil">Clay soil</option>
+                                <option value="red soil">Red soil</option>
+                            </select>
                         </div>
-                        <strong class="weather-temp" id="weatherTemp">-</strong>
-                    </div>
-                    <div class="weather-condition" id="weatherCondition">-</div>
-                    <div class="weather-metrics">
-                        <span id="weatherHumidity">Humidity -</span>
-                        <span id="weatherRain">Rain -</span>
-                        <span id="weatherWind">Wind -</span>
-                    </div>
-                    <div class="weather-subtitle">Next hours</div>
-                    <div class="weather-hourly" id="weatherHourly"></div>
-                    <div class="weather-subtitle">Next days</div>
-                    <div class="weather-daily" id="weatherDaily"></div>
-                </div>
-            </div>
-        </div>
-        <div class="sidebar-section" id="whatifPanel">
-            <p class="sidebar-label">What-If Simulator</p>
-            <div class="whatif-panel">
-                <h4>Scenario Simulator</h4>
-                <div class="whatif-slider-row"><div class="whatif-label"><span>Irrigation Change</span><strong id="whatifIrrVal">0%</strong></div><input type="range" id="whatifIrrSlider" class="whatif-slider" min="-50" max="50" value="0" step="5"></div>
-                <div class="whatif-slider-row"><div class="whatif-label"><span>Rainfall Change</span><strong id="whatifRainVal">0 mm</strong></div><input type="range" id="whatifRainSlider" class="whatif-slider" min="-500" max="500" value="0" step="50"></div>
-                <div class="whatif-slider-row"><div class="whatif-label"><span>Fertilizer</span><strong id="whatifFertVal">0%</strong></div><input type="range" id="whatifFertSlider" class="whatif-slider" min="-50" max="50" value="0" step="5"></div>
-                <div class="whatif-slider-row"><div class="whatif-label"><span>Temperature</span><strong id="whatifTempVal">0 C</strong></div><input type="range" id="whatifTempSlider" class="whatif-slider" min="-5" max="5" value="0" step="1"></div>
-                <div class="whatif-slider-row"><div class="whatif-label"><span>Pest Intensity</span><strong id="whatifPestVal">0%</strong></div><input type="range" id="whatifPestSlider" class="whatif-slider" min="0" max="100" value="0" step="5"></div>
-                <div class="whatif-slider-row"><div class="whatif-label"><span>Soil Moisture</span><strong id="whatifMoistureVal">55%</strong></div><input type="range" id="whatifMoistureSlider" class="whatif-slider" min="0" max="100" value="55" step="5"></div>
-                <button class="simulate-btn" id="simulateBtn">Run Simulation</button>
-            </div>
-        </div>
-    </aside>
-    <main class="chat-main">
-        <header class="chat-topbar">
-            <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle dashboard panel" aria-controls="sidebar" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
-            <div class="topbar-info"><div class="status-dot"></div><div class="topbar-copy"><span class="topbar-title">Smart Farming AI</span><span class="topbar-sub">Professional agricultural assistant for Tamil Nadu farming insights</span></div></div>
-            <div class="topbar-context" aria-label="Active context summary">
-                <span class="topbar-context-label">Active Context</span>
-                <span class="topbar-context-chip" id="topCtxCrop">Crop: -</span>
-                <span class="topbar-context-chip" id="topCtxDistrict">Location: -</span>
-            </div>
-            <div class="topbar-actions"><button class="language-toggle" id="languageToggle" type="button" title="Switch language"><span class="lang-en">EN</span><span class="lang-divider">/</span><span class="lang-ta">தமிழ்</span></button><button class="action-btn tts-toggle-btn" id="ttsBtnGlobal" title="Enable text-to-speech"><span class="tts-icon">Audio</span></button><button class="action-btn clear-action" id="clearChat" title="Clear conversation">Reset</button></div>
-        </header>
-        <div class="messages-wrap" id="messagesWrap" role="log" aria-live="polite" aria-label="Chat messages"><div class="messages-list" id="messagesList"></div></div>
-        <div class="input-area">
-            <div class="input-card">
-                <div class="input-row">
-                    <div class="chat-menu">
-                        <button class="chat-menu-btn" id="chatMenuBtn" type="button" aria-haspopup="true" aria-expanded="false" title="Open tools">Tools</button>
-                        <div class="chat-menu-panel" id="chatMenuPanel" hidden>
-                            <label class="chat-menu-option" for="soilImageInput">Soil Identification</label>
+                        <div class="manual-field"><label for="manualMonth">Month</label>
+                            <select id="manualMonth">
+                                <option value="">Select month</option>
+                                <optgroup label="Winter">
+                                    <option>January</option>
+                                    <option>February</option>
+                                    <option>December</option>
+                                </optgroup>
+                                <optgroup label="Summer">
+                                    <option>March</option>
+                                    <option>April</option>
+                                    <option>May</option>
+                                </optgroup>
+                                <optgroup label="Kharif / Rainy">
+                                    <option>June</option>
+                                    <option>July</option>
+                                    <option>August</option>
+                                    <option>September</option>
+                                </optgroup>
+                                <optgroup label="Rabi">
+                                    <option>October</option>
+                                    <option>November</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="manual-field"><label for="manualSeason">Season</label>
+                            <select id="manualSeason">
+                                <option value="">Select season</option>
+                                <option value="Winter">Winter</option>
+                                <option value="Summer">Summer</option>
+                                <option value="Kharif">Kharif / Rainy</option>
+                                <option value="Rabi">Rabi</option>
+                                <option value="Autumn">Autumn</option>
+                                <option value="Whole Year">Whole Year / Perennial</option>
+                            </select>
                         </div>
                     </div>
-                    <input type="text" id="chatInput" placeholder="Ask about crops, rainfall, fertilizer, irrigation, pest risks..." autocomplete="off" spellcheck="false">
-                    <button class="voice-btn" id="voiceInputBtn" title="Speak your question" type="button" aria-label="Speak your question">
-                        <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M18 11a6 6 0 0 1-12 0"/><path d="M12 17v4"/><path d="M8 21h8"/></svg>
-                    </button>
-                    <button class="send-btn" id="sendBtn" title="Send message" type="button" aria-label="Send message">
-                        <svg class="btn-icon send-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4 3 11.4l7.3 2.3L17.8 7l-5.7 8.3 4.9 4.7L21 4Z"/></svg>
-                    </button>
+                    <div class="manual-actions"><button class="manual-btn apply-btn" id="applyContextBtn"
+                            type="button">Apply Context</button><button class="manual-btn reset-btn"
+                            id="resetContextBtn" type="button">Reset</button></div>
                 </div>
-                <div class="input-footer"><span id="voiceStatus">Tamil Nadu Smart Farming • Context-aware follow-up support</span></div>
+            </div>
+            <div class="sidebar-section">
+                <p class="sidebar-label">Active Context</p>
+                <div class="context-panel" id="contextPanel">
+                    <div class="context-help">Current stored values used for follow-up questions.</div>
+                    <div class="context-grid">
+                        <div class="context-item"><span class="context-key">Crop</span><strong id="ctxCrop">-</strong>
+                        </div>
+                        <div class="context-item"><span class="context-key">Location</span><strong
+                                id="ctxDistrict">-</strong></div>
+                        <div class="context-item"><span class="context-key">Soil</span><strong id="ctxSoil">-</strong>
+                        </div>
+                        <div class="context-item"><span class="context-key">Month</span><strong id="ctxMonth">-</strong>
+                        </div>
+                        <div class="context-item"><span class="context-key">Season</span><strong
+                                id="ctxSeason">-</strong></div>
+                    </div>
+                </div>
+            </div>
+            <div class="sidebar-section weather-section">
+                <p class="sidebar-label">Weather Updates</p>
+                <div class="weather-panel" id="weatherPanel">
+                    <div class="weather-empty" id="weatherEmpty">Select or ask about a district to load live weather.
+                    </div>
+                    <div class="weather-content" id="weatherContent" hidden>
+                        <div class="weather-head">
+                            <div>
+                                <span class="weather-district" id="weatherDistrict">-</span>
+                            </div>
+                            <strong class="weather-temp" id="weatherTemp">-</strong>
+                        </div>
+                        <div class="weather-condition" id="weatherCondition">-</div>
+                        <div class="weather-metrics">
+                            <span id="weatherHumidity">Humidity -</span>
+                            <span id="weatherRain">Rain -</span>
+                            <span id="weatherWind">Wind -</span>
+                        </div>
+                        <div class="weather-subtitle">Next hours</div>
+                        <div class="weather-hourly" id="weatherHourly"></div>
+                        <div class="weather-subtitle">Next days</div>
+                        <div class="weather-daily" id="weatherDaily"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="sidebar-section" id="whatifPanel">
+                <p class="sidebar-label">What-If Simulator</p>
+                <div class="whatif-panel">
+                    <h4>Scenario Simulator</h4>
+                    <div class="whatif-slider-row">
+                        <div class="whatif-label"><span>Irrigation Change</span><strong id="whatifIrrVal">0%</strong>
+                        </div><input type="range" id="whatifIrrSlider" class="whatif-slider" min="-50" max="50"
+                            value="0" step="5">
+                    </div>
+                    <div class="whatif-slider-row">
+                        <div class="whatif-label"><span>Rainfall Change</span><strong id="whatifRainVal">0 mm</strong>
+                        </div><input type="range" id="whatifRainSlider" class="whatif-slider" min="-500" max="500"
+                            value="0" step="50">
+                    </div>
+                    <div class="whatif-slider-row">
+                        <div class="whatif-label"><span>Fertilizer</span><strong id="whatifFertVal">0%</strong></div>
+                        <input type="range" id="whatifFertSlider" class="whatif-slider" min="-50" max="50" value="0"
+                            step="5">
+                    </div>
+                    <div class="whatif-slider-row">
+                        <div class="whatif-label"><span>Temperature</span><strong id="whatifTempVal">0 C</strong></div>
+                        <input type="range" id="whatifTempSlider" class="whatif-slider" min="-5" max="5" value="0"
+                            step="1">
+                    </div>
+                    <div class="whatif-slider-row">
+                        <div class="whatif-label"><span>Pest Intensity</span><strong id="whatifPestVal">0%</strong>
+                        </div><input type="range" id="whatifPestSlider" class="whatif-slider" min="0" max="100"
+                            value="0" step="5">
+                    </div>
+                    <div class="whatif-slider-row">
+                        <div class="whatif-label"><span>Soil Moisture</span><strong id="whatifMoistureVal">55%</strong>
+                        </div><input type="range" id="whatifMoistureSlider" class="whatif-slider" min="0" max="100"
+                            value="55" step="5">
+                    </div>
+                    <button class="simulate-btn" id="simulateBtn">Run Simulation</button>
+                </div>
+            </div>
+        </aside>
+        <main class="chat-main">
+            <header class="chat-topbar">
+                <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle dashboard panel"
+                    aria-controls="sidebar" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="3" y1="6" x2="21" y2="6" />
+                        <line x1="3" y1="12" x2="21" y2="12" />
+                        <line x1="3" y1="18" x2="21" y2="18" />
+                    </svg></button>
+                <div class="topbar-info">
+                    <div class="status-dot"></div>
+                    <div class="topbar-copy"><span class="topbar-title">Smart Farming AI</span><span
+                            class="topbar-sub">Professional agricultural assistant for Tamil Nadu farming
+                            insights</span></div>
+                </div>
+                <div class="topbar-context" aria-label="Active context summary">
+                    <span class="topbar-context-label">Active Context</span>
+                    <span class="topbar-context-chip" id="topCtxCrop">Crop: -</span>
+                    <span class="topbar-context-chip" id="topCtxDistrict">Location: -</span>
+                </div>
+                <div class="topbar-actions">
+                    <button class="tool-action-btn price-btn trigger-price-modal" id="openPriceModalTop" type="button" title="Today's Market Price">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/></svg>
+                        <span>Market Price</span>
+                    </button>
+                    <button class="tool-action-btn soil-btn trigger-soil-modal" id="openSoilModalTop" type="button" title="Soil Identification">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                        <span>Soil ID</span>
+                    </button>
+                    <button class="language-toggle" id="languageToggle" type="button" title="Switch language"><span class="lang-en">EN</span><span class="lang-divider">/</span><span class="lang-ta">தமிழ்</span></button>
+                    <button class="action-btn tts-toggle-btn" id="ttsBtnGlobal" title="Enable text-to-speech"><span class="tts-icon">Audio</span></button>
+                    <button class="action-btn clear-action" id="clearChat" title="Clear conversation">Reset</button>
+                </div>
+            </header>
+            <div class="messages-wrap" id="messagesWrap" role="log" aria-live="polite" aria-label="Chat messages">
+                <div class="messages-list" id="messagesList"></div>
+            </div>
+            <div class="input-area">
+                <div class="input-card">
+                    <div class="input-quick-tools">
+                        <span class="quick-tools-title">⚡ Quick Tools:</span>
+                        <button class="quick-tool-chip price-chip trigger-price-modal" id="chipPriceBtn" type="button">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/></svg>
+                            <span>Today's Market Price</span>
+                        </button>
+                        <button class="quick-tool-chip soil-chip trigger-soil-modal" id="chipSoilBtn" type="button">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                            <span>Soil Identification</span>
+                        </button>
+                    </div>
+                    <div class="input-row">
+                        <div class="chat-menu">
+                            <button class="chat-menu-btn" id="chatMenuBtn" type="button" aria-haspopup="true"
+                                aria-expanded="false" title="Open tools">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" aria-hidden="true">
+                                    <rect x="3" y="3" width="8" height="8" rx="2"/>
+                                    <rect x="13" y="3" width="8" height="8" rx="2"/>
+                                    <rect x="3" y="13" width="8" height="8" rx="2"/>
+                                    <rect x="13" y="13" width="8" height="8" rx="2"/>
+                                </svg>
+                                <span>Tools</span>
+                                <span class="caret">▾</span>
+                            </button>
+                            <div class="chat-menu-panel" id="chatMenuPanel" hidden>
+                                <div class="chat-tools-header">Select Tool</div>
+                                <button class="chat-tool-card trigger-price-modal" id="chatToolPriceBtn" type="button">
+                                    <div class="chat-tool-icon price-tool-icon">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/></svg>
+                                    </div>
+                                    <div class="chat-tool-info">
+                                        <span class="chat-tool-name">Today's Market Price</span>
+                                        <span class="chat-tool-desc">Live mandi rates by commodity &amp; district</span>
+                                    </div>
+                                    <svg class="chat-tool-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+                                </button>
+                                <button class="chat-tool-card trigger-soil-modal" id="chatToolSoilBtn" type="button">
+                                    <div class="chat-tool-icon soil-tool-icon">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                                    </div>
+                                    <div class="chat-tool-info">
+                                        <span class="chat-tool-name">Soil Identification</span>
+                                        <span class="chat-tool-desc">Upload a photo — AI classifies soil type</span>
+                                    </div>
+                                    <svg class="chat-tool-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <input type="text" id="chatInput"
+                            placeholder="Ask about crops, rainfall, fertilizer, irrigation, pest risks..."
+                            autocomplete="off" spellcheck="false">
+                        <button class="bar-tool-btn price-bar-btn trigger-price-modal" id="barPriceBtn" type="button" title="Market Price Finder">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/></svg>
+                        </button>
+                        <button class="bar-tool-btn soil-bar-btn trigger-soil-modal" id="barSoilBtn" type="button" title="Soil Identification">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                        </button>
+                        <button class="voice-btn" id="voiceInputBtn" title="Speak your question" type="button"
+                            aria-label="Speak your question">
+                            <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" />
+                                <path d="M18 11a6 6 0 0 1-12 0" />
+                                <path d="M12 17v4" />
+                                <path d="M8 21h8" />
+                            </svg>
+                        </button>
+                        <button class="send-btn" id="sendBtn" title="Send message" type="button"
+                            aria-label="Send message">
+                            <svg class="btn-icon send-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M21 4 3 11.4l7.3 2.3L17.8 7l-5.7 8.3 4.9 4.7L21 4Z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="input-footer"><span id="voiceStatus">Tamil Nadu Smart Farming • Context-aware follow-up
+                            support</span></div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>window.ALL_DISTRICTS = {{ districts | tojson }};</script>
+    <script src="{{ url_for('static', filename='script.js') }}?v=999"></script>
+
+    <!-- ══ Market Price Modal ═══════════════════════════════════════════ -->
+    <div class="tool-modal-overlay" id="priceModalOverlay" role="dialog" aria-modal="true" aria-label="Market Price Tool" hidden>
+        <div class="tool-modal-card price-modal-card">
+            <button class="tool-modal-close" id="closePriceModal" aria-label="Close">&times;</button>
+            <div class="tool-modal-header">
+                <div class="tool-modal-icon price-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/></svg>
+                </div>
+                <div>
+                    <h2 class="tool-modal-title">Today's Market Price</h2>
+                    <p class="tool-modal-sub">Live mandi prices from Agmarknet · Tamil Nadu</p>
+                </div>
+            </div>
+
+            <div class="price-filters">
+                <div class="price-filter-group">
+                    <label for="priceCommoditySelect">Commodity <span class="required">*</span></label>
+                    <div class="select-wrap">
+                        <select id="priceCommoditySelect">
+                            <option value="">-- Select commodity --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="price-filter-group">
+                    <label for="priceDistrictSelect">District (optional)</label>
+                    <div class="select-wrap">
+                        <select id="priceDistrictSelect">
+                            <option value="">All districts</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="price-fetch-btn" id="priceFetchBtn" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    Get Today's Rate
+                </button>
+            </div>
+
+            <div class="price-result-area" id="priceResultArea" hidden>
+                <div class="price-date-badge" id="priceDateBadge"></div>
+                <div class="price-cards-grid" id="priceCardsGrid"></div>
+                <button class="price-add-chat-btn" id="priceAddChatBtn" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    Add to Chat
+                </button>
+            </div>
+            <div class="price-empty" id="priceEmpty">Select a commodity above and click <strong>Get Today's Rate</strong> to see live mandi prices.</div>
+            <div class="price-error" id="priceError" hidden></div>
+            <div class="price-loading" id="priceLoading" hidden>
+                <div class="modal-spinner"></div>
+                <span>Fetching latest rates…</span>
             </div>
         </div>
-    </main>
-</div>
-<script>window.ALL_DISTRICTS = {{ districts | tojson }};</script>
-<script src="{{ url_for('static', filename='script.js') }}"></script>
+    </div>
+
+    <!-- ══ Soil Identification Modal ════════════════════════════════════ -->
+    <div class="tool-modal-overlay" id="soilModalOverlay" role="dialog" aria-modal="true" aria-label="Soil Identification Tool" hidden>
+        <div class="tool-modal-card soil-modal-card">
+            <button class="tool-modal-close" id="closeSoilModal" aria-label="Close">&times;</button>
+            <div class="tool-modal-header">
+                <div class="tool-modal-icon soil-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                </div>
+                <div>
+                    <h2 class="tool-modal-title">Soil Identification</h2>
+                    <p class="tool-modal-sub">Upload a soil photo — AI classifies it in seconds</p>
+                </div>
+            </div>
+
+            <div class="soil-modal-body">
+                <div class="soil-upload-zone" id="soilDropZone">
+                    <input type="file" id="soilModalFileInput" accept="image/*" hidden>
+                    <div class="soil-upload-inner" id="soilUploadInner">
+                        <div class="soil-upload-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        </div>
+                        <p class="soil-upload-title">Drop a soil image here</p>
+                        <p class="soil-upload-hint">or</p>
+                        <label class="soil-browse-btn" for="soilModalFileInput">Browse Files</label>
+                        <p class="soil-upload-formats">Supports JPG, PNG, WEBP</p>
+                    </div>
+                    <div class="soil-preview-wrap" id="soilModalPreviewWrap" hidden>
+                        <img class="soil-preview-img" id="soilModalPreviewImg" alt="Soil image preview">
+                        <button class="soil-preview-remove" id="soilModalRemoveBtn" title="Remove">&times;</button>
+                    </div>
+                </div>
+
+                <div class="soil-info-strip">
+                    <div class="soil-info-item"><strong>Supported types:</strong> Alluvial · Black · Clay · Red</div>
+                    <div class="soil-info-item"><strong>Best results:</strong> Clear daylight photo, soil visible</div>
+                </div>
+
+                <button class="soil-classify-btn" id="soilClassifyBtn" type="button" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Classify Soil
+                </button>
+
+                <div class="soil-result-area" id="soilModalResultArea" hidden></div>
+                <div class="soil-modal-loading" id="soilModalLoading" hidden>
+                    <div class="modal-spinner"></div>
+                    <span>Analyzing soil image…</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
+
 </html>
