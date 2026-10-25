@@ -6,14 +6,27 @@ from pathlib import Path
 import pandas as pd
 import joblib
 
-YIELD_MODEL_PATH   = Path("models/yield_model.pkl")
-PEST_MODEL_PATH    = Path("models/pest_risk_model.pkl")
-PEST_ENCODER_PATH  = Path("models/pest_label_encoder.pkl")
+# Resolve artifacts relative to this module, not the shell's current directory.
+MODEL_DIR          = Path(__file__).resolve().parent / "models"
+YIELD_MODEL_PATH   = MODEL_DIR / "yield_model.pkl"
+PEST_MODEL_PATH    = MODEL_DIR / "pest_risk_model.pkl"
+PEST_ENCODER_PATH  = MODEL_DIR / "pest_label_encoder.pkl"
 
 _yield_model   = None
 _pest_model    = None
 _pest_encoder  = None
 _models_loaded = False
+
+
+def _disable_parallel_workers(model):
+    """Keep inference compatible with restricted Windows/server runtimes."""
+    if not hasattr(model, "get_params") or not hasattr(model, "set_params"):
+        return
+    params = model.get_params(deep=True)
+    parallel_params = {name: 1 for name, value in params.items()
+                       if name.endswith("n_jobs") and value not in (None, 1)}
+    if parallel_params:
+        model.set_params(**parallel_params)
 
 
 def load_models():
@@ -22,21 +35,32 @@ def load_models():
 
     if _yield_model is None:
         if YIELD_MODEL_PATH.exists():
-            _yield_model = joblib.load(YIELD_MODEL_PATH)
-            print(f"[ml_models] Yield model loaded from {YIELD_MODEL_PATH}")
+            try:
+                _yield_model = joblib.load(YIELD_MODEL_PATH)
+                _disable_parallel_workers(_yield_model)
+                print(f"[ml_models] Yield model loaded from {YIELD_MODEL_PATH}")
+            except Exception as exc:
+                print(f"[ml_models] ERROR: Could not load yield model at {YIELD_MODEL_PATH}: {exc}")
         else:
             print(f"[ml_models] WARNING: Yield model not found at {YIELD_MODEL_PATH}. Run train_yield_model.py")
 
     if _pest_model is None:
         if PEST_MODEL_PATH.exists():
-            _pest_model = joblib.load(PEST_MODEL_PATH)
-            print(f"[ml_models] Pest risk model loaded from {PEST_MODEL_PATH}")
+            try:
+                _pest_model = joblib.load(PEST_MODEL_PATH)
+                _disable_parallel_workers(_pest_model)
+                print(f"[ml_models] Pest risk model loaded from {PEST_MODEL_PATH}")
+            except Exception as exc:
+                print(f"[ml_models] ERROR: Could not load pest risk model at {PEST_MODEL_PATH}: {exc}")
         else:
             print(f"[ml_models] WARNING: Pest model not found at {PEST_MODEL_PATH}. Run train_pest_risk_model.py")
 
     if _pest_encoder is None:
         if PEST_ENCODER_PATH.exists():
-            _pest_encoder = joblib.load(PEST_ENCODER_PATH)
+            try:
+                _pest_encoder = joblib.load(PEST_ENCODER_PATH)
+            except Exception as exc:
+                print(f"[ml_models] ERROR: Could not load pest label encoder at {PEST_ENCODER_PATH}: {exc}")
 
     _models_loaded = True
 
@@ -74,7 +98,9 @@ def predict_pest_risk(input_dict: dict) -> str:
 
 
 def models_available() -> dict:
-    """Return which models are currently loaded."""
+    """Load model artifacts on demand and return their availability."""
+    if not _models_loaded:
+        load_models()
     return {
         "yield_model":    _yield_model is not None,
         "pest_risk_model": _pest_model is not None,

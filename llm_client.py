@@ -12,9 +12,10 @@ Optimised for low-latency responses:
 from __future__ import annotations
 
 import json
+import os
 import requests
 
-OLLAMA_URL     = "http://localhost:11434/api/chat"
+OLLAMA_URL     = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11435/api/chat")
 ROUTER_MODEL   = "qwen2.5:0.5b-instruct"   # tiny, fast: just outputs a JSON tool call
 PROSE_MODEL    = "qwen2.5:1.5b-instruct"   # better prose for final answer
 DEFAULT_TIMEOUT = 120                        # seconds; 0.5b should reply in < 10s on CPU

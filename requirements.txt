@@ -7,3 +7,7 @@ flask
 werkzeug
 python-dotenv
 requests
+joblib
+scikit-learn==1.7.0
+xgboost
+matplotlib

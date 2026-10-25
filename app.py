@@ -55,6 +55,16 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
+# Temporary English-only mode. Set True to restore the Tamil UI and API responses.
+app.config["TAMIL_LANGUAGE_ENABLED"] = False
+
+
+def _request_language(value: str | None) -> str:
+    """Keep the product English-only while retaining a single rollback switch."""
+    if not app.config.get("TAMIL_LANGUAGE_ENABLED", False):
+        return "en"
+    language = (value or "en").strip().lower()
+    return "ta" if language.startswith("ta") else "en"
 
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
@@ -139,7 +149,6 @@ DISTRICT_TEMP_BASE = {
 }
 
 de.load_data()
-ml_models.load_models()
 _classify_soil = None
 _soil_classifier_error = None
 
@@ -175,6 +184,10 @@ def _load_soil_classifier():
 
 
 def _get_soil_classifier():
+    # TensorFlow and the image model use substantial memory. Load them only
+    # when the user actually uploads an image, not while starting Flask.
+    if _classify_soil is None and _soil_classifier_error is None:
+        _load_soil_classifier()
     return _classify_soil
 
 
@@ -192,9 +205,11 @@ def _runtime_diagnostics() -> dict:
         info["protobuf_version_error"] = f"{type(e).__name__}: {e}"
 
     try:
-        import tensorflow as tf  # type: ignore
+        from importlib.metadata import PackageNotFoundError, version
 
-        info["tensorflow_version"] = getattr(tf, "__version__", None)
+        info["tensorflow_version"] = version("tensorflow")
+    except PackageNotFoundError:
+        info["tensorflow_version_error"] = "TensorFlow is not installed"
     except Exception as e:
         info["tensorflow_version_error"] = f"{type(e).__name__}: {e}"
 
@@ -203,9 +218,6 @@ def _runtime_diagnostics() -> dict:
 
 def _trim_history(history: list, limit: int = 50) -> list:
     return history[-limit:] if len(history) > limit else history
-
-
-_load_soil_classifier()
 
 
 def _warmup_llm_models():
@@ -242,7 +254,8 @@ _warmup_llm_models()
 
 @app.route("/")
 def index():
-    return render_template("index.html", districts=de.ALL_DISTRICTS)
+    return render_template("index.html", districts=de.ALL_DISTRICTS,
+                           tamil_language_enabled=app.config["TAMIL_LANGUAGE_ENABLED"])
 
 
 @app.route("/health", methods=["GET"])
@@ -423,7 +436,7 @@ def _num(value, default=0.0):
 @app.route("/simulate_advanced", methods=["POST"])
 def simulate_advanced():
     data = request.get_json(silent=True) or {}
-    language = (data.get("language") or "en").strip().lower()
+    language = _request_language(data.get("language"))
     district = de.fuzzy_district(data.get("district") or "")
     crop = str(data.get("crop") or "selected crop").strip() or "selected crop"
     if not district:
@@ -553,7 +566,7 @@ def chat():
     data = request.get_json(silent=True) or {}
     message = (data.get("message") or "").strip()
     session_id = (data.get("session_id") or "").strip() or str(uuid.uuid4())
-    language = (data.get("language") or "en").strip().lower()
+    language = _request_language(data.get("language"))
 
     if session_id not in conversation_store:
         conversation_store[session_id] = []
@@ -574,6 +587,8 @@ def chat():
         "parser": result.get("parser", "local"),
         "district": result.get("district"),
         "memory": result.get("memory", {}),
+        "plan": result.get("plan", []),
+        "agents_used": result.get("agents_used", []),
         "session_id": session_id,
     })
 
@@ -594,7 +609,7 @@ def chat_stream():
     data = request.get_json(silent=True) or {}
     message    = (data.get("message")    or "").strip()
     session_id = (data.get("session_id") or "").strip() or str(uuid.uuid4())
-    language   = (data.get("language")   or "en").strip().lower()
+    language   = _request_language(data.get("language"))
 
     if session_id not in conversation_store:
         conversation_store[session_id] = []
@@ -620,7 +635,7 @@ def chat_stream():
             hist.append({"role": "bot",  "text": assembled})
             conversation_store[session_id] = _trim_history(hist)
 
-            yield f"data: {_json.dumps({'type': 'done', 'session_id': session_id, 'district': meta.get('district'), 'memory': new_memory})}\n\n"
+            yield f"data: {_json.dumps({'type': 'done', 'session_id': session_id, 'district': meta.get('district'), 'memory': new_memory, 'plan': meta.get('plan', []), 'agents_used': meta.get('agents_used', [])})}\n\n"
 
         except Exception as exc:  # noqa: BLE001
             yield f"data: {_json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
@@ -669,7 +684,7 @@ def get_session():
 
 @app.route("/soil", methods=["POST"])
 def soil():
-    language = (request.form.get("language") or "en").strip().lower()
+    language = _request_language(request.form.get("language"))
     if "image" not in request.files:
         return jsonify({"error": "படம் வழங்கப்படவில்லை" if language.startswith("ta") else "No image provided"}), 400
     file = request.files["image"]

@@ -8,8 +8,10 @@
 let SESSION_ID  = localStorage.getItem('sf_session') || null;
 let activeContext = { district: null, soil: null, season: null, month: null, crop: null };
 let isProcessing  = false;
-let APP_LANGUAGE  = localStorage.getItem('sf_language') || 'en';
-if (!['en', 'ta'].includes(APP_LANGUAGE)) APP_LANGUAGE = APP_LANGUAGE.startsWith('ta') ? 'ta' : 'en';
+// Re-enable the bilingual interface by switching TAMIL_LANGUAGE_ENABLED in app.py.
+const ENABLE_TAMIL_LANGUAGE = window.AGRIDECISION_FEATURES?.tamilLanguage === true;
+let APP_LANGUAGE = ENABLE_TAMIL_LANGUAGE ? (localStorage.getItem('sf_language') || 'en') : 'en';
+if (!['en', 'ta'].includes(APP_LANGUAGE)) APP_LANGUAGE = 'en';
 
 // ── DOM refs ──────────────────────────────────────────────────────────
 const messagesList   = document.getElementById('messagesList');
@@ -90,8 +92,8 @@ let recognitionFallbackTimer = null;
 let recognitionStartTimer    = null;
 
 // ── Welcome Content ────────────────────────────────────────────────────
-const INTRO_MESSAGE = `I'm your **Smart Farming AI** for Tamil Nadu — ask me anything about crops, soil, pest risks, rainfall, or farm economics.\n\nTry one of these:`;
-const INTRO_MESSAGE_TA = `நான் தமிழ்நாட்டிற்கான **Smart Farming AI** — பயிர்கள், மண், பூச்சி அபாயம், மழை அல்லது வேளாண் பொருளாதாரம் பற்றி கேளுங்கள்.\n\nமுயற்சி செய்யலாம்:`;
+const INTRO_MESSAGE = `I'm **AgriDecision**, an autonomous precision agriculture decision support system for Tamil Nadu. Tell me your farm goal and context; I plan the needed checks and coordinate crop, water, risk, soil, and economics specialists.\n\nTry one of these:`;
+const INTRO_MESSAGE_TA = `நான் தமிழ்நாட்டிற்கான **AgriDecision** தானியங்கி துல்லிய வேளாண் முடிவு ஆதரவு அமைப்பு. உங்கள் பண்ணை இலக்கையும் சூழலையும் கூறுங்கள்; தேவையான நிபுணர் ஆய்வுகளைத் திட்டமிட்டு ஆதாரங்களுடன் பரிந்துரை வழங்குவேன்.\n\nமுயற்சி செய்யலாம்:`;
 
 const WELCOME_QUERIES = [
   'Best crops for Madurai with red soil during Kharif?',
@@ -109,8 +111,8 @@ const WELCOME_QUERIES_TA = [
 // ── UI Text ────────────────────────────────────────────────────────────
 const UI_TEXT = {
   en: {
-    chatPlaceholder: 'Ask about crops, rainfall, fertilizer, pest risks...',
-    voiceFooter:     'Smart Farming AI · Tamil Nadu · Context-aware agricultural assistant',
+    chatPlaceholder: 'Describe a farm goal, crop, and district...',
+    voiceFooter:     'AgriDecision · Tamil Nadu · Multi-agent farm decision support',
     manualUpdated:   '✅ Context updated.',
     noDistrict:      '⚠️ Set a district first, then run the simulation.',
     noSpeech:        'No speech detected. Tap the mic and try again.',
@@ -866,6 +868,7 @@ async function toggleVoiceInput() {
 // ── Language Toggle ────────────────────────────────────────────────────
 function applyPageLanguage() {
   document.documentElement.lang = APP_LANGUAGE;
+  if (languageToggle) languageToggle.hidden = !ENABLE_TAMIL_LANGUAGE;
   if (languageToggle) languageToggle.classList.toggle('tamil-mode', APP_LANGUAGE === 'ta');
   if (chatInput)     chatInput.placeholder = t('chatPlaceholder');
   setVoiceStatus(t('voiceFooter'));
@@ -875,6 +878,7 @@ function applyPageLanguage() {
 }
 
 function toggleLanguage() {
+  if (!ENABLE_TAMIL_LANGUAGE) return;
   APP_LANGUAGE = APP_LANGUAGE === 'ta' ? 'en' : 'ta';
   localStorage.setItem('sf_language', APP_LANGUAGE);
   applyPageLanguage();

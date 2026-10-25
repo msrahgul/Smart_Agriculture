@@ -50,11 +50,218 @@ import data_engine as de
 # ── constants ─────────────────────────────────────────────────────────────
 MAX_STEPS = 2   # rarely need more than 1 tool; hard cap prevents runaway loops
 
+# Goal-directed specialist plans. Each specialist owns one evidence source;
+# the planner executes only the tools needed for the user's stated goal.
+GOAL_PLANS = {
+    "crop_decision": [
+        ("crop_advisor", "compute_suitability_score"),
+        ("water_advisor", "get_rainfall_stats"),
+        ("economics_advisor", "estimate_crop_profit"),
+    ],
+    "farm_overview": [
+        ("crop_advisor", "get_district_overview"),
+        ("water_advisor", "get_rainfall_stats"),
+        ("risk_advisor", "get_pest_risk_historical"),
+    ],
+    "pest_assessment": [("risk_advisor", "predict_pest_risk_ml")],
+    "yield_assessment": [("yield_advisor", "predict_crop_yield_ml")],
+    "rainfall_assessment": [("water_advisor", "get_rainfall_stats")],
+    "fertilizer_advice": [("soil_nutrition_advisor", "get_fertilizer_recommendation")],
+    "profit_assessment": [("economics_advisor", "estimate_crop_profit")],
+}
+
+
+def _plan_for_query(message: str, memory: dict) -> tuple[str, list[tuple[str, str]], dict]:
+    """Create a bounded, inspectable plan from the request and session context."""
+    text = (message or "").lower()
+    district = _extract_district(message, memory.get("district"))
+    crop = _extract_crop(message, memory.get("crop"))
+    context = {
+        "district": district,
+        "crop_name": crop,
+        "soil_type": memory.get("soil") or next((soil for soil in
+            ("alluvial soil", "black soil", "clay soil", "red soil", "sandy soil", "loamy soil")
+            if soil in text), None),
+        "season": memory.get("season") or next((season for season in
+            ("kharif", "rabi", "summer", "winter", "autumn", "whole year")
+            if season in text), None),
+    }
+    if any(term in text for term in ("pest", "insect", "பூச்சி")):
+        goal = "pest_assessment"
+    elif any(term in text for term in ("yield", "harvest", "விளைச்சல்")):
+        goal = "yield_assessment"
+    elif any(term in text for term in ("rainfall", "rain", "மழை")):
+        goal = "rainfall_assessment"
+    elif any(term in text for term in ("fertilizer", "fertiliser", "nutrient", "உரம்")):
+        goal = "fertilizer_advice"
+    elif any(term in text for term in ("profit", "cost", "லாபம்")):
+        goal = "profit_assessment"
+    elif any(term in text for term in ("overview", "farm plan", "farm overview", "விவரம்")):
+        goal = "farm_overview"
+    elif any(term in text for term in ("recommend", "best crop", "which crop", "what crop", "பயிர்")):
+        goal = "crop_decision"
+    else:
+        return "general_question", [], context
+
+    plan = list(GOAL_PLANS[goal])
+    if goal == "crop_decision" and not crop:
+        # Discover options, then check water context and historical risk.
+        plan = [("crop_advisor", "get_top_crops"),
+                ("water_advisor", "get_rainfall_stats"),
+                ("risk_advisor", "get_pest_risk_historical")]
+    return goal, plan, context
+
+
+def _format_planned_evidence(
+    message: str,
+    goal: str,
+    context: dict,
+    evidence: list[tuple[str, str, dict]],
+    failures: list[dict],
+) -> str:
+    """Format specialist observations as a concise, farmer-readable report."""
+    # Keep rainfall figures deterministic: small local models can invent trend
+    # interpretations or percentages when asked to rewrite numeric evidence.
+    rainfall = next((item for _name, _tool, item in evidence if "avg_annual_mm" in item), None)
+    if rainfall:
+        district = rainfall.get("district", context.get("district", ""))
+        period = rainfall.get("period")
+        average = rainfall.get("avg_annual_mm")
+        title = f"### Historical Rainfall — {district}"
+        lines = [title, ""]
+        if period:
+            lines.append(f"**Data period:** {period}")
+        if average is not None:
+            lines.append(f"**Average annual rainfall:** {average:,.1f} mm" if isinstance(average, (int, float))
+                         else f"**Average annual rainfall:** {average} mm")
+        seasons = (("sw_monsoon_mm", "Southwest monsoon"),
+                   ("ne_monsoon_mm", "Northeast monsoon"),
+                   ("hot_weather_mm", "Hot weather"),
+                   ("winter_mm", "Winter"))
+        available_seasons = [(label, rainfall[key]) for key, label in seasons if rainfall.get(key) is not None]
+        if available_seasons:
+            lines.extend(["", "**Seasonal breakdown**"])
+            for label, value in available_seasons:
+                rendered = f"{value:,.1f}" if isinstance(value, (int, float)) else str(value)
+                lines.append(f"- **{label}:** {rendered} mm")
+        trend = rainfall.get("yearly_trend") or []
+        if trend:
+            lines.extend(["", "**Recent yearly totals**", "", "| Year | Rainfall (mm) |", "| --- | ---: |"])
+            for row in trend:
+                value = row.get("total_mm", "—")
+                rendered = f"{value:,.1f}" if isinstance(value, (int, float)) else str(value)
+                lines.append(f"| {row.get('year', '—')} | {rendered} |")
+        return "\n".join(lines)
+
+    payload = {
+        "goal": goal.replace("_", " "),
+        "district": context.get("district"),
+        "crop": context.get("crop_name"),
+        "specialist_results": [
+            {"specialist": specialist.replace("_", " "), "data": observation}
+            for specialist, _tool, observation in evidence
+        ],
+        "unavailable_checks": [
+            {"specialist": item["agent"].replace("_", " "), "reason": item["error"]}
+            for item in failures
+        ],
+    }
+    system = (
+        "You are the final response writer for a precision agriculture decision support system. "
+        "Turn the supplied specialist data into a concise, farmer-readable Markdown report. "
+        "Use only the supplied data. Never show raw JSON, internal tool names, specialist names, "
+        "the execution plan, or generic filler such as 'use these estimates'. Do not invent "
+        "interpretations or recommendations. Start with one short ### heading and a one-sentence "
+        "summary. Put each key value on its own bullet, with bold labels and units. "
+        "For yearly_trend, show a compact Markdown table with Year and Rainfall (mm), preserving "
+        "every supplied row. If there are no yearly values, omit that section. "
+        "For rainfall data, organize fields under **Rainfall summary**, **Seasonal breakdown**, "
+        "and **Recent yearly totals**. Preserve numeric values exactly, including decimals. "
+        "Mention the data period and describe it as historical data. Keep headings short. "
+        "If a check failed, state that briefly in an **Unavailable** bullet. Output only the report."
+    )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": (
+            f"Farmer's question: {message}\n\n"
+            f"Verified specialist data (JSON):\n{json.dumps(payload, ensure_ascii=False, default=str)}"
+        )},
+    ]
+    try:
+        answer = prose_llm.chat(messages, temperature=0.1, num_predict=700).strip()
+        if answer:
+            return answer
+    except RuntimeError:
+        pass
+
+    # Keep the planned path readable even when Ollama is offline.
+    lines = [f"### {goal.replace('_', ' ').title()} — {context.get('district') or 'Farm'}"]
+    for _specialist, _tool, observation in evidence:
+        if "avg_annual_mm" in observation:
+            district = observation.get("district", context.get("district", ""))
+            period = observation.get("period")
+            lines.extend([
+                f"**Historical rainfall summary{f' ({period})' if period else ''}**",
+                f"- **District:** {district}",
+                f"- **Average annual rainfall:** {observation['avg_annual_mm']} mm",
+                "", "**Seasonal breakdown**",
+            ])
+            for key, label in (("sw_monsoon_mm", "Southwest monsoon"),
+                               ("ne_monsoon_mm", "Northeast monsoon"),
+                               ("hot_weather_mm", "Hot weather"),
+                               ("winter_mm", "Winter")):
+                if observation.get(key) is not None:
+                    lines.append(f"- **{label}:** {observation[key]} mm")
+            trend = observation.get("yearly_trend") or []
+            if trend:
+                lines.extend(["", "**Recent yearly totals**", "", "| Year | Rainfall (mm) |", "| --- | ---: |"])
+                lines.extend(f"| {row.get('year')} | {row.get('total_mm')} |" for row in trend)
+        else:
+            for key, value in observation.items():
+                if value not in (None, "", [], {}):
+                    lines.append(f"- **{key.replace('_', ' ').title()}:** {value}")
+    for item in failures:
+        lines.append(f"- **Unavailable:** {item['agent'].replace('_', ' ').title()} check — {item['error']}")
+    return "\n".join(lines)
+
+
+def _run_planned_agents(message: str, memory: dict) -> tuple[str, dict] | None:
+    """Execute a small specialist team and format its collected evidence."""
+    goal, plan, context = _plan_for_query(message, memory)
+    if not plan:
+        return None
+    required = ("district",) if goal not in {"profit_assessment"} else ("district", "crop_name")
+    if any(not context.get(key) for key in required):
+        return None
+    if goal in {"pest_assessment", "yield_assessment", "profit_assessment", "fertilizer_advice"} and not context.get("crop_name"):
+        return None
+
+    evidence = []
+    trace = []
+    for specialist, tool_name in plan:
+        available = {"district": context.get("district"), "crop_name": context.get("crop_name"),
+                     "soil_type": context.get("soil_type"), "season": context.get("season")}
+        args = {key: available[key] for key in TOOL_MAP[tool_name].parameters
+                if key in available and available[key] is not None}
+        observation = TOOL_MAP[tool_name].run(**args)
+        succeeded = isinstance(observation, dict) and "error" not in observation
+        trace.append({"agent": specialist, "tool": tool_name,
+                      "status": "complete" if succeeded else "failed",
+                      "error": None if succeeded else (observation or {}).get("error", "Invalid tool response")})
+        if isinstance(observation, dict) and "error" not in observation:
+            evidence.append((specialist, tool_name, observation))
+
+    failures = [step for step in trace if step["status"] == "failed"]
+    answer = _format_planned_evidence(message, goal, context, evidence, failures)
+    answer += "\n\nFOLLOWUP_CHIPS: Best crops for this district?|Check rainfall?|Compare crop profit?"
+    return answer, {"intent": goal, "district": context.get("district"),
+                    "plan": trace, "agents_used": [item[0] for item in evidence]}
+
 # ── greeting fast-path ────────────────────────────────────────────────────
 WELCOME_TEXT = (
-    "👋 **Vanakkam! I'm your Smart Farming AI for Tamil Nadu.**\n\n"
-    "Ask me about **crops**, **soil**, **pest risks**, **rainfall**, **cost/profit**, "
-    "or **yield** for any district.\n\n"
+    "👋 **Welcome to AgriDecision**, an autonomous precision agriculture decision support system for Tamil Nadu.\n\n"
+    "Tell me your farm goal and context. I will plan relevant crop, water, pest-risk, yield, "
+    "soil-nutrition, and economics checks, then show the evidence and specialists used.\n\n"
     "**Example questions:**\n"
     "- Best crops for Madurai with red soil during Kharif?\n"
     "- What is the pest risk for rice in Thanjavur?\n"
@@ -249,7 +456,13 @@ def _get_formatter_system(language: str = "en") -> str:
         )
     else:
         lang_instruction = (
-            "Reply in clear, helpful English.\n"
+            "Reply in clear, helpful English. Use Markdown that renders cleanly in a chat window.\n"
+            "Format the answer using this order: a concise '###' heading; one bold direct-answer sentence; "
+            "then a **Key details** label on its own line and brief bullet points whenever the tool result contains multiple values. "
+            "Keep headings short (3-7 words); never put a sentence or explanation in a heading. "
+            "Use short paragraphs and bold key values or recommendations. Never return raw JSON, code fences, "
+            "or one long paragraph. Preserve uncertainty and distinguish measured/lookup data from estimates. "
+            "Use only facts in the tool result; do not invent causes, forecasts, or recommendations.\n"
             "End with exactly this line (2-3 short suggested question chips, max 6 words each, e.g. 'Coimbatore rainfall?|Pest risk for rice?'):\n"
             "FOLLOWUP_CHIPS: <short suggestion 1>|<short suggestion 2>|<short suggestion 3>"
         )
@@ -267,7 +480,17 @@ if the JSON contains data — present what is there.
 - If the JSON has an "error" key, apologise briefly and suggest the user rephrase.
 - Format numbers clearly. Use ₹ for rupees, t/ha for tonnes per hectare, mm for millimetres.
 - Use bullet points or a short table when listing multiple items.
-- Keep the response concise: 3-8 sentences or bullet points.
+- Put the direct answer first, followed by a relevant Markdown heading such as **What the data shows** or **Recommended next step** when useful.
+- Start every answer with a Markdown heading (###) that names the result, then give one bold summary sentence.
+- For multiple fields, add a **Key details** label and put each fact on its own bullet. Do not invent details to fill sections.
+- Use this structure (omit Key details if there is only one fact):
+  ### Short result title
+  **Direct answer in one sentence.**
+
+  **Key details**
+  - **Label:** value
+- Keep each paragraph short. Bold important values, use consistent units, and avoid repeating the question.
+- Keep the response concise: 3-8 sentences or bullet points. Never expose raw JSON, internal tool names, or a wall of text.
 """
 
 
@@ -283,6 +506,7 @@ def _build_fallback_prompt(
     don't match any data tool. Injects today's date + known session memory
     so the LLM can answer "what to plant this month?" sensibly.
     """
+    is_tamil = language.startswith("ta")
     today = date.today()
     month_name = today.strftime("%B")   # e.g. "July"
 
@@ -306,7 +530,9 @@ def _build_fallback_prompt(
         )
     else:
         lang_note = (
-            "Reply in clear English.\n"
+            "Reply in clear English. Use readable Markdown: lead with the direct answer, then use a useful short heading, "
+            "brief paragraphs or bullets, and bold key values. Avoid a wall of text, raw JSON, and unsupported claims. "
+            "If uncertain, state the uncertainty clearly.\n"
             "End with exactly this line (2-3 short suggested question chips, max 6 words each, e.g. 'Coimbatore rainfall?|Pest risk for rice?'):\n"
             "FOLLOWUP_CHIPS: <short suggestion 1>|<short suggestion 2>|<short suggestion 3>"
         )
@@ -813,6 +1039,16 @@ def process_query(
             "memory":   memory,
         }
 
+    planned = _run_planned_agents(message, memory)
+    if planned:
+        answer, meta = planned
+        if language.startswith("ta"):
+            answer = _translate_same_template_to_tamil(answer)
+        new_memory = _merge_memory(memory, district=meta.get("district"),
+                                   crop=_extract_crop(message, memory.get("crop")))
+        return {"text": answer, "intent": meta["intent"], "district": meta.get("district"),
+                "memory": new_memory, "plan": meta["plan"], "agents_used": meta["agents_used"]}
+
     try:
         answer, entities = _run_agent(message, memory, stream=False, language=language)
     except RuntimeError as e:
@@ -855,6 +1091,18 @@ def process_query_stream(
         def _static():
             yield WELCOME_TEXT
         return _static(), memory, {"intent": "greeting", "district": memory.get("district")}
+
+    planned = _run_planned_agents(message, memory)
+    if planned:
+        answer, meta = planned
+        if language.startswith("ta"):
+            answer = _translate_same_template_to_tamil(answer)
+        merged = _merge_memory(memory, district=meta.get("district"),
+                               crop=_extract_crop(message, memory.get("crop")))
+        def _planned_answer():
+            yield answer
+        return _planned_answer(), merged, {"intent": meta["intent"], "district": meta.get("district"),
+                                           "plan": meta["plan"], "agents_used": meta["agents_used"]}
 
     try:
         gen, entities = _run_agent(message, memory, stream=True, language=language)

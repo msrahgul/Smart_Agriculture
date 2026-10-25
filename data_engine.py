@@ -9,7 +9,8 @@ import numpy as np
 from difflib import get_close_matches
 
 # ── Dataset paths ──────────────────────────────────────────────────────────────
-DATA_DIR = "data"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 HIST_PATH = os.path.join(DATA_DIR, "TamilNadu_ML_Master_Historical.csv")
 PROFILE_PATH = os.path.join(DATA_DIR, "TamilNadu_District_Profile_2024_25.csv")
 SUPP_PATH = os.path.join(DATA_DIR, "supplemental_crop_profiles_tn.csv")
